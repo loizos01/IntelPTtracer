@@ -2,6 +2,7 @@
 //https://github.com/intel/libipt/blob/master/doc/howto_capture.md
 
 #define _POSIX_C_SOURCE 200112L
+#define _GNU_SOURCE //syscall 
 
 /* C standard library */
 #include <errno.h>
@@ -14,6 +15,8 @@
 #include <unistd.h>
 #include <sys/user.h>
 #include <sys/wait.h>
+#include <sys/mman.h>
+#include <sys/ioctl.h>
 
 /* Linux */
 #include <linux/perf_event.h>
@@ -21,6 +24,9 @@
 #include <linux/hw_breakpoint.h>
 #include <sys/ptrace.h>
 #include <unistd.h>
+
+
+
 
 #define FATAL(...) \
     do { \
@@ -35,13 +41,9 @@ main(int argc, char **argv)
     
     struct perf_event_attr attr;
 
-    //perf_event_mmap_page
-    struct perf_event_mmap_page *header;
-    void *base, *data, *aux;    
-
     memset(&attr, 0, sizeof(attr));
     attr.size = sizeof(attr);
-    attr.type = <ready type>(9); /* /sys/bus/event_source/devices/intel_pt/type */
+    attr.type = 9; /* /sys/bus/event_source/devices/intel_pt/type Intel PT PMU type */ 
 
     attr.exclude_kernel = 1;
 
@@ -66,14 +68,44 @@ main(int argc, char **argv)
     /* parent */
     waitpid(pid, 0, 0); // sync with execvp
     
+    /*File descriptor for child process*/
     int fd;
-    fd = syscall(SYS_perf_event_open, &attr, <pid>, -1, -1, 0);
+    fd = syscall(SYS_perf_event_open, &attr, pid, -1, -1, 0);
+  
+   /* 
+    if (fd == -1) {
+      fprintf(stderr, "Error opening leader %llx\n", pe.config);
+      exit(EXIT_FAILURE);
+    }
+    */
+
+    struct perf_event_mmap_page *header;
+    void *base, *data, *aux;
+    int n, m;
+    n = 15;
+    m = 15;
+
+    //Capturing    
+    base = mmap(NULL, (1+ (1 << n) * PAGE_SIZE), PROT_WRITE, MAP_SHARED, fd, 0);
+    if (base == MAP_FAILED)
+        return -1;
+
+    header = base;
+    data = base + header->data_offset;
+
+    header->aux_offset = header->data_offset + header->data_size;
+    header->aux_size   = (1 << m) * PAGE_SIZE;
+
+    aux = mmap(NULL, header->aux_size, PROT_READ, MAP_SHARED, fd,header->aux_offset);
+    if (aux == MAP_FAILED)
+        return -1;
+    
+    //Reset IOC
+    ioctl(fd, PERF_EVENT_IOC_RESET, 0);
+    ioctl(fd, PERF_EVENT_IOC_ENABLE, 0);
 
     ptrace(PTRACE_SETOPTIONS, pid, 0, PTRACE_O_EXITKILL);
 		
-
-
-
     for (;;) {
         /* Enter next system call */
         if (ptrace(PTRACE_SYSCALL, pid, 0, 0) == -1)
@@ -97,20 +129,7 @@ main(int argc, char **argv)
 
 	/*ROP detection goes here*/
 	
-	
-   	 base = mmap(NULL, (1+2**n) * PAGE_SIZE, PROT_WRITE, MAP_SHARED, fd, 0);
-	 if (base == MAP_FAILED)
-        	return <handle data mmap error>();
-
-	 header = base;
-	 data = base + header->data_offset;
-
-	 header->aux_offset = header->data_offset + header->data_size;
-	 header->aux_size   = (2**m) * PAGE_SIZE;
-
-	 aux = mmap(NULL, header->aux_size, PROT_READ, MAP_SHARED, fd,header->aux_offset);
-	 if (aux == MAP_FAILED)
-        	return <handle aux mmap error>();
+	ioctl(fd, PERF_EVENT_IOC_DISABLE, 0);
 
 
 
