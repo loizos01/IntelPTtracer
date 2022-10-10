@@ -18,18 +18,18 @@ void write_memory(void* addr, size_t size, char* filename){
     free(readout);
 }
 
+
 int main(int argc, char **argv) {
     struct perf_event_attr pe;
-    long long count;
     int fd;
 
     memset(&pe, 0, sizeof(pe));
     pe.type = 9;
     pe.size = sizeof(pe);
-    pe.config = 0x300e601; // perf record -vv -e intel_pt/cyc/u
+    pe.config = 0x300e603; // perf record -vv -e intel_pt/cyc/u
     pe.disabled = 1;
-    pe.exclude_kernel = 1;
-    pe.sample_type=0x10086;
+    pe.exclude_kernel = 1;   
+   
     fd = syscall(SYS_perf_event_open, &pe, 0, -1, -1, 0);
     if (fd == -1) {
         fprintf(stderr, "Error opening leader %llx\n", pe.config);
@@ -39,9 +39,9 @@ int main(int argc, char **argv) {
     struct perf_event_mmap_page *header;
     void *base, *data, *aux;
     int n, m;
-    n = 15;
-    m = 15;
-
+    n = 5;
+    m = 5;
+   
     base = mmap(NULL, (1+(1 << n)) * PAGE_SIZE, PROT_WRITE, MAP_SHARED, fd, 0);
     if (base == MAP_FAILED){
         printf("MAP_FAILED\n");
@@ -54,8 +54,7 @@ int main(int argc, char **argv) {
     header->aux_offset = header->data_offset + header->data_size;
     header->aux_size   = (1 << m) * PAGE_SIZE;
 
-    aux = mmap(NULL, header->aux_size, PROT_READ, MAP_SHARED, fd,
-            header->aux_offset);
+    aux = mmap(NULL, header->aux_size, PROT_READ, MAP_SHARED, fd, header->aux_offset);
     if (aux == MAP_FAILED) {
         printf("MAP_FAILED\n");
         return -1;
