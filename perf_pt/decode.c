@@ -48,8 +48,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <hwtracer_util.h>
-#include "perf_pt_private.h"
 #include "pt_cpu.c"
+#include "perf_pt_private.h"
 #include "pt_cpuid.c"
 struct load_self_image_args {
     struct pt_image *image;
@@ -60,10 +60,10 @@ struct load_self_image_args {
     struct  pt_image_section_cache *iscache;
 };
 
-
 // Private prototypes.
 static bool handle_events(struct pt_block_decoder *, int *, struct perf_pt_cerror *);
 static bool load_self_image(struct load_self_image_args *);
+static int load_self_image_cb(struct dl_phdr_info *, size_t, void *);
 static bool block_is_terminated(struct pt_block *);
 
 // Public prototypes.
@@ -72,79 +72,6 @@ void *perf_pt_init_block_decoder(void *, uint64_t, int, char *, int *,
 bool perf_pt_next_block(struct pt_block_decoder *, int *, uint64_t *,
                         uint64_t *, struct perf_pt_cerror *);
 void perf_pt_free_block_decoder(struct pt_block_decoder *);
-
-/*
- * The callback for `load_self_image()`, called once for each program header.
- *
- * Returns 1 to stop iterating, and in our case to indicate an error. Returns 0
- * on success and to continue iterating. See dl_iterate_phdr(3) for information
- * on this interface.
- */
-static int
-load_self_image_cb(struct dl_phdr_info *info, size_t size, void *data)
-{
-    ElfW(Phdr) phdr;
-    ElfW(Half) i;
-
-    (void) size; // Unused. Silence warning.
-    struct load_self_image_args *args = data;
-    struct perf_pt_cerror *err = args->err;
-
-    const char *filename = info->dlpi_name;
-    bool vdso = false;
-    if (!*filename) {
-        // On Linux, an empty name means that it is the executable itself.
-        filename = args->current_exe;
-    } else {
-        vdso = strcmp(filename, VDSO_NAME) == 0;
-    }
-
-    for (i = 0; i < info->dlpi_phnum; i++) {
-        phdr = info->dlpi_phdr[i];
-        // Ensure we only use loadable and executable sections.
-        if ((phdr.p_type != PT_LOAD) || (!(phdr.p_flags & PF_X))) {
-            continue;
-        }
-
-        uint64_t vaddr = info->dlpi_addr + phdr.p_vaddr;
-        uint64_t offset;
-
-        // Load the code into the libipt image.
-        //
-        // The VDSO is special. It doesn't exist on-disk as a regular library,
-        // but rather it is a set of pages shared with the kernel.
-        //
-        // XXX Since libipt currently requires us to load from a file, we have
-        // to dump the VDSO to disk and have libipt load it back in.
-        //
-        // Discussion on adding libipt support for loading from memory here:
-        // https://github.com/01org/processor-trace/issues/37
-        if (vdso) {
-            int rv = dump_vdso(args->vdso_fd, vaddr, phdr.p_filesz, err);
-            if (!rv) {
-                return 1;
-            }
-            filename = args->vdso_filename;
-            offset = 0;
-        } else {
-            offset = phdr.p_offset;
-        }
-
-        int isid = pt_iscache_add_file(args->iscache, filename, offset, phdr.p_filesz, vaddr);
-        if (isid < 0) {
-            return 1;
-        }
-
-        int rv = pt_image_add_cached(args->image, args->iscache, isid, NULL);
-        if (rv < 0) {
-            perf_pt_set_err(err, perf_pt_cerror_ipt, -rv);
-            return 1;
-        }
-    }
-
-    return 0;
-}
-
 
 /*
  * Get ready to retrieve the basic blocks from a PT trace using the code of the
@@ -169,8 +96,10 @@ void *
 perf_pt_init_block_decoder(void *buf, uint64_t len, int vdso_fd, char *vdso_filename,
                            int *decoder_status, struct perf_pt_cerror *err,
                            const char *current_exe) {
+    
+	
     bool failing = false;
-
+ 
     // Make a block decoder configuration.
     struct pt_config config;
     memset(&config, 0, sizeof(config));
@@ -179,13 +108,14 @@ perf_pt_init_block_decoder(void *buf, uint64_t len, int vdso_fd, char *vdso_file
     config.end = buf + len;
     config.flags.variant.block.end_on_call = 1;
     config.flags.variant.block.end_on_jump = 1;
-
+    
     // Decode for the current CPU.
     struct pt_block_decoder *decoder = NULL;
     int rv = pt_cpu_read(&config.cpu);
     if (rv != pte_ok) {
         perf_pt_set_err(err, perf_pt_cerror_ipt, -rv);
         failing = true;
+	printf("error decode cpu\n");
         goto clean;
     }
 
@@ -195,43 +125,53 @@ perf_pt_init_block_decoder(void *buf, uint64_t len, int vdso_fd, char *vdso_file
         if (rv < 0) {
             perf_pt_set_err(err, perf_pt_cerror_ipt, -rv);
             failing = true;
+	    printf("error bugs cpu\n");
             goto clean;
         }
     }
+
 
     // Instantiate a decoder.
     decoder = pt_blk_alloc_decoder(&config);
     if (decoder == NULL) {
         perf_pt_set_err(err, perf_pt_cerror_unknown, 0);
         failing = true;
+	printf("error instant decoder\n");
         goto clean;
     }
+    
+    printf("Info:\n");
 
     // Sync the decoder.
     *decoder_status = pt_blk_sync_forward(decoder);
+    printf("crash point\n");
     if (*decoder_status == -pte_eos) {
         // There were no blocks in the stream. The user will find out on next
         // call to perf_pt_next_block().
+	printf("error sync1\n");
         goto clean;
     } else if (*decoder_status < 0) {
         perf_pt_set_err(err, perf_pt_cerror_ipt, -*decoder_status);
         failing = true;
+	printf("error sync2\n");
         goto clean;
     }
-
     // Build and load a memory image from which to recover control flow.
     struct pt_image *image = pt_image_alloc(NULL);
     if (image == NULL) {
         perf_pt_set_err(err, perf_pt_cerror_unknown, 0);
         failing = true;
+	printf("error build and load\n");
         goto clean;
     }
+  
 
     // Use image cache to speed up decoding.
     struct pt_image_section_cache *iscache = pt_iscache_alloc(NULL);
     if(iscache == NULL) {
         perf_pt_set_err(err, perf_pt_cerror_unknown, 0);
         failing = true;
+	printf("error image cache\n");
         goto clean;
     }
 
@@ -239,6 +179,7 @@ perf_pt_init_block_decoder(void *buf, uint64_t len, int vdso_fd, char *vdso_file
                                              err, current_exe, iscache};
     if (!load_self_image(&load_args)) {
         failing = true;
+	printf("error load self image\n");
         goto clean;
     }
 
@@ -246,6 +187,7 @@ perf_pt_init_block_decoder(void *buf, uint64_t len, int vdso_fd, char *vdso_file
     if (rv < 0) {
         perf_pt_set_err(err, perf_pt_cerror_ipt, -rv);
         failing = true;
+	printf("error set image\n");
         goto clean;
     }
 
@@ -492,7 +434,77 @@ load_self_image(struct load_self_image_args *args)
     return true;
 }
 
+/*
+ * The callback for `load_self_image()`, called once for each program header.
+ *
+ * Returns 1 to stop iterating, and in our case to indicate an error. Returns 0
+ * on success and to continue iterating. See dl_iterate_phdr(3) for information
+ * on this interface.
+ */
+static int
+load_self_image_cb(struct dl_phdr_info *info, size_t size, void *data)
+{
+    ElfW(Phdr) phdr;
+    ElfW(Half) i;
 
+    (void) size; // Unused. Silence warning.
+    struct load_self_image_args *args = data;
+    struct perf_pt_cerror *err = args->err;
+
+    const char *filename = info->dlpi_name;
+    bool vdso = false;
+    if (!*filename) {
+        // On Linux, an empty name means that it is the executable itself.
+        filename = args->current_exe;
+    } else {
+        vdso = strcmp(filename, VDSO_NAME) == 0;
+    }
+
+    for (i = 0; i < info->dlpi_phnum; i++) {
+        phdr = info->dlpi_phdr[i];
+        // Ensure we only use loadable and executable sections.
+        if ((phdr.p_type != PT_LOAD) || (!(phdr.p_flags & PF_X))) {
+            continue;
+        }
+
+        uint64_t vaddr = info->dlpi_addr + phdr.p_vaddr;
+        uint64_t offset;
+
+        // Load the code into the libipt image.
+        //
+        // The VDSO is special. It doesn't exist on-disk as a regular library,
+        // but rather it is a set of pages shared with the kernel.
+        //
+        // XXX Since libipt currently requires us to load from a file, we have
+        // to dump the VDSO to disk and have libipt load it back in.
+        //
+        // Discussion on adding libipt support for loading from memory here:
+        // https://github.com/01org/processor-trace/issues/37
+        if (vdso) {
+            int rv = dump_vdso(args->vdso_fd, vaddr, phdr.p_filesz, err);
+            if (!rv) {
+                return 1;
+            }
+            filename = args->vdso_filename;
+            offset = 0;
+        } else {
+            offset = phdr.p_offset;
+        }
+
+        int isid = pt_iscache_add_file(args->iscache, filename, offset, phdr.p_filesz, vaddr);
+        if (isid < 0) {
+            return 1;
+        }
+
+        int rv = pt_image_add_cached(args->image, args->iscache, isid, NULL);
+        if (rv < 0) {
+            perf_pt_set_err(err, perf_pt_cerror_ipt, -rv);
+            return 1;
+        }
+    }
+
+    return 0;
+}
 
 /*
  * Dump the VDSO code into the open file descriptor `fd`, starting at `vaddr`
@@ -525,3 +537,4 @@ perf_pt_free_block_decoder(struct pt_block_decoder *decoder) {
         pt_blk_free_decoder(decoder);
     }
 }
+
