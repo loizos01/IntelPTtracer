@@ -50,21 +50,30 @@ int main(int argc, char **argv) {
   */
    //printf("%"PRIu64"\n", len);
 
+   uint64_t first_inst;
+   uint64_t last_inst;
+
    int dec_status;
+
    FILE  *vdsoFd = fopen(vdsoFn, "w+");   
    int vdsoFd_int = fileno(vdsoFd);
    struct pt_block_decoder *decoder = hwt_ipt_init_block_decoder(tracer->aux_buf,tracer->aux_bufsize,vdsoFd_int,vdsoFn,&dec_status,&pptCerror,curr_exe);
 
    if(decoder==NULL)
-      printf("decoder sync error");
+      printf("error: decoder initialization\n");
 
-   printf("Decoder status %d\n",dec_status);
-  if(decoder == NULL)
-	printf("error: decoder initialization\n");
+   //printf("Decoder status %d\n",dec_status);
 
+   if(!hwt_ipt_next_block(decoder,&dec_status,&first_inst,&last_inst,&pptCerror)){
+      printf("error: getting next block");
+   }
 
-
+   printf("First Instruction: 0x%lx"PRIu64" Last Instruction 0x%lx"PRIu64" \n ",first_inst,last_inst);
+   
+   hwt_ipt_free_block_decoder(decoder);
 
    if(!hwt_perf_free_collector(tracer,&pptCerror))
 	   printf("error: Freeing Tracer\n");
  }
+
+
