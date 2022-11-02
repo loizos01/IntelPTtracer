@@ -36,27 +36,17 @@
 // SOFTWARE.
 
 #include <stdbool.h>
-#include <intel-pt2.h>
-#include "perf_pt_private.h"
+#include <intel-pt.h>
+#include "hwtracer_private.h"
 
 /*
  * Sets the error information (if not already set).
  */
 void
-perf_pt_set_err(struct perf_pt_cerror *err, int kind, int code) {
+hwt_set_cerr(struct hwt_cerror *err, int kind, int code) {
     // Only set the error info if we would not be overwriting an earlier error.
-    if (err->kind == perf_pt_cerror_unused) {
+    if (err->kind == hwt_cerror_unused) {
         err->kind = kind;
         err->code = code;
     }
-}
-
-/*
- * Indicates if the specified error code is the overflow code.
- * This exists to avoid copying (and keeping in sync) the ipt error code on the
- * Rust side.
- */
-bool
-perf_pt_is_overflow_err(int err) {
-    return err == pte_overflow;
 }

@@ -1,77 +1,66 @@
-// Copyright (c) 2018 King's College London
-// created by the Software Development Team <http://soft-dev.org/>
-//
-// The Universal Permissive License (UPL), Version 1.0
-//
-// Subject to the condition set forth below, permission is hereby granted to any
-// person obtaining a copy of this software, associated documentation and/or
-// data (collectively the "Software"), free of charge and under any and all
-// copyright rights in the Software, and any and all patent rights owned or
-// freely licensable by each licensor hereunder covering either (i) the
-// unmodified Software as contributed to or provided by such licensor, or (ii)
-// the Larger Works (as defined below), to deal in both
-//
-// (a) the Software, and
-// (b) any piece of software and/or hardware listed in the lrgrwrks.txt file
-// if one is included with the Software (each a "Larger Work" to which the Software
-// is contributed by such licensors),
-//
-// without restriction, including without limitation the rights to copy, create
-// derivative works of, display, perform, and distribute the Software and make,
-// use, sell, offer for sale, import, export, have made, and have sold the
-// Software and the Larger Work(s), and to sublicense the foregoing rights on
-// either these or other terms.
-//
-// This license is subject to the following condition: The above copyright
-// notice and either this complete permission notice or at a minimum a reference
-// to the UPL must be included in all copies or substantial portions of the
-// Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 #define _GNU_SOURCE
 
 #include <stdio.h>
-#include <intel-pt2.h>
+#include <intel-pt.h>
 #include <pt_cpu.h>
 #include <stdbool.h>
 #include <inttypes.h>
 #include <stdint.h>
-#include <link2.h>
+#include <link.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <hwtracer_util.h>
+
 #include "pt_cpu.c"
-#include "perf_pt_private.h"
 #include "pt_cpuid.c"
+#include "hwtracer_private.h"
+
+#define VDSO_NAME "linux-vdso.so.1"
+
 struct load_self_image_args {
     struct pt_image *image;
     int vdso_fd;
     char *vdso_filename;
-    struct perf_pt_cerror *err;
+    struct hwt_cerror *err;
     const char *current_exe;
     struct  pt_image_section_cache *iscache;
 };
 
 // Private prototypes.
-static bool handle_events(struct pt_block_decoder *, int *, struct perf_pt_cerror *);
+static bool handle_events(struct pt_block_decoder *, int *, struct hwt_cerror *);
 static bool load_self_image(struct load_self_image_args *);
 static int load_self_image_cb(struct dl_phdr_info *, size_t, void *);
 static bool block_is_terminated(struct pt_block *);
 
 // Public prototypes.
-void *perf_pt_init_block_decoder(void *, uint64_t, int, char *, int *,
-                                 struct perf_pt_cerror *, const char *);
-bool perf_pt_next_block(struct pt_block_decoder *, int *, uint64_t *,
-                        uint64_t *, struct perf_pt_cerror *);
-void perf_pt_free_block_decoder(struct pt_block_decoder *);
+void *hwt_ipt_init_block_decoder(void *, uint64_t, int, char *, int *,
+                                 struct hwt_cerror *, const char *);
+bool hwt_ipt_next_block(struct pt_block_decoder *, int *, uint64_t *,
+                        uint64_t *, struct hwt_cerror *);
+void hwt_ipt_free_block_decoder(struct pt_block_decoder *);
+
+/*
+ * Dump the VDSO code into the open file descriptor `fd`, starting at `vaddr`
+ * and of size `len` into a temp file.
+ *
+ * Returns true on success or false otherwise.
+ */
+bool
+hwt_ipt_dump_vdso(int fd, uint64_t vaddr, size_t len, struct hwt_cerror *err)
+{
+    size_t written = 0;
+    while (written != len) {
+        int wrote = write(fd, (void *) vaddr + written, len - written);
+        if (wrote == -1) {
+            hwt_set_cerr(err, hwt_cerror_errno, errno);
+            return false;
+        }
+        written += wrote;
+    }
+
+    return true;
+}
 
 /*
  * Get ready to retrieve the basic blocks from a PT trace using the code of the
@@ -93,13 +82,11 @@ void perf_pt_free_block_decoder(struct pt_block_decoder *);
  * Returns a pointer to a configured libipt block decoder or NULL on error.
  */
 void *
-perf_pt_init_block_decoder(void *buf, uint64_t len, int vdso_fd, char *vdso_filename,
-                           int *decoder_status, struct perf_pt_cerror *err,
+hwt_ipt_init_block_decoder(void *buf, uint64_t len, int vdso_fd, char *vdso_filename,
+                           int *decoder_status, struct hwt_cerror *err,
                            const char *current_exe) {
-    
-	
     bool failing = false;
- 
+
     // Make a block decoder configuration.
     struct pt_config config;
     memset(&config, 0, sizeof(config));
@@ -108,14 +95,13 @@ perf_pt_init_block_decoder(void *buf, uint64_t len, int vdso_fd, char *vdso_file
     config.end = buf + len;
     config.flags.variant.block.end_on_call = 1;
     config.flags.variant.block.end_on_jump = 1;
-    
+
     // Decode for the current CPU.
     struct pt_block_decoder *decoder = NULL;
     int rv = pt_cpu_read(&config.cpu);
     if (rv != pte_ok) {
-        perf_pt_set_err(err, perf_pt_cerror_ipt, -rv);
+        hwt_set_cerr(err, hwt_cerror_ipt, -rv);
         failing = true;
-	printf("error decode cpu\n");
         goto clean;
     }
 
@@ -123,55 +109,45 @@ perf_pt_init_block_decoder(void *buf, uint64_t len, int vdso_fd, char *vdso_file
     if (config.cpu.vendor) {
         rv = pt_cpu_errata(&config.errata, &config.cpu);
         if (rv < 0) {
-            perf_pt_set_err(err, perf_pt_cerror_ipt, -rv);
+            hwt_set_cerr(err, hwt_cerror_ipt, -rv);
             failing = true;
-	    printf("error bugs cpu\n");
             goto clean;
         }
     }
 
-
     // Instantiate a decoder.
     decoder = pt_blk_alloc_decoder(&config);
     if (decoder == NULL) {
-        perf_pt_set_err(err, perf_pt_cerror_unknown, 0);
+        hwt_set_cerr(err, hwt_cerror_unknown, 0);
         failing = true;
-	printf("error instant decoder\n");
         goto clean;
     }
-    
-    printf("Info:\n");
 
     // Sync the decoder.
     *decoder_status = pt_blk_sync_forward(decoder);
-    printf("crash point\n");
     if (*decoder_status == -pte_eos) {
         // There were no blocks in the stream. The user will find out on next
-        // call to perf_pt_next_block().
-	printf("error sync1\n");
+        // call to hwt_ipt_next_block().
         goto clean;
     } else if (*decoder_status < 0) {
-        perf_pt_set_err(err, perf_pt_cerror_ipt, -*decoder_status);
+        hwt_set_cerr(err, hwt_cerror_ipt, -*decoder_status);
         failing = true;
-	printf("error sync2\n");
         goto clean;
     }
+
     // Build and load a memory image from which to recover control flow.
     struct pt_image *image = pt_image_alloc(NULL);
     if (image == NULL) {
-        perf_pt_set_err(err, perf_pt_cerror_unknown, 0);
+        hwt_set_cerr(err, hwt_cerror_unknown, 0);
         failing = true;
-	printf("error build and load\n");
         goto clean;
     }
-  
 
     // Use image cache to speed up decoding.
     struct pt_image_section_cache *iscache = pt_iscache_alloc(NULL);
     if(iscache == NULL) {
-        perf_pt_set_err(err, perf_pt_cerror_unknown, 0);
+        hwt_set_cerr(err, hwt_cerror_unknown, 0);
         failing = true;
-	printf("error image cache\n");
         goto clean;
     }
 
@@ -179,15 +155,13 @@ perf_pt_init_block_decoder(void *buf, uint64_t len, int vdso_fd, char *vdso_file
                                              err, current_exe, iscache};
     if (!load_self_image(&load_args)) {
         failing = true;
-	printf("error load self image\n");
         goto clean;
     }
 
     rv = pt_blk_set_image(decoder, image);
     if (rv < 0) {
-        perf_pt_set_err(err, perf_pt_cerror_ipt, -rv);
+        hwt_set_cerr(err, hwt_cerror_ipt, -rv);
         failing = true;
-	printf("error set image\n");
         goto clean;
     }
 
@@ -212,11 +186,11 @@ clean:
  * `*last_instr` are undefined.
  */
 bool
-perf_pt_next_block(struct pt_block_decoder *decoder, int *decoder_status,
-        uint64_t *first_instr, uint64_t *last_instr, struct perf_pt_cerror *err) {
+hwt_ipt_next_block(struct pt_block_decoder *decoder, int *decoder_status,
+        uint64_t *first_instr, uint64_t *last_instr, struct hwt_cerror *err) {
     // If there are events pending, look at those first.
     if (handle_events(decoder, decoder_status, err) != true) {
-        // handle_events will have already called perf_pt_set_err().
+        // handle_events will have already called hwt_set_cerr().
         return false;
     } else if (*decoder_status & pts_eos) {
         // End of stream.
@@ -237,7 +211,7 @@ perf_pt_next_block(struct pt_block_decoder *decoder, int *decoder_status,
     *last_instr = 0;
     while (!block_is_terminated(&block)) {
         if (handle_events(decoder, decoder_status, err) != true) {
-            // handle_events will have already called perf_pt_set_err().
+            // handle_events will have already called hwt_set_cerr().
             return false;
         } else if (*decoder_status & pts_eos) {
             // End of stream.
@@ -245,7 +219,7 @@ perf_pt_next_block(struct pt_block_decoder *decoder, int *decoder_status,
             return true;
         }
         // It's possible at this point that we get notified of an event in the
-        // stream. This will be handled in the next call to `perf_pt_next_block`.
+        // stream. This will be handled in the next call to `hwt_ipt_next_block`.
         if ((*decoder_status != 0) && (*decoder_status != pts_event_pending)) {
             panic("Unexpected decoder status: %d", *decoder_status);
         }
@@ -260,7 +234,7 @@ perf_pt_next_block(struct pt_block_decoder *decoder, int *decoder_status,
             return true;
         } else if (*decoder_status < 0) {
             // A real error.
-            perf_pt_set_err(err, perf_pt_cerror_ipt, -*decoder_status);
+            hwt_set_cerr(err, hwt_cerror_ipt, -*decoder_status);
             return false;
         }
 
@@ -297,14 +271,14 @@ perf_pt_next_block(struct pt_block_decoder *decoder, int *decoder_status,
  * overflow.
  */
 static bool
-handle_events(struct pt_block_decoder *decoder, int *decoder_status, struct perf_pt_cerror *err) {
+handle_events(struct pt_block_decoder *decoder, int *decoder_status, struct hwt_cerror *err) {
     bool ret = true;
 
     while(*decoder_status & pts_event_pending) {
         struct pt_event event;
         *decoder_status = pt_blk_event(decoder, &event, sizeof(event));
         if (*decoder_status < 0) {
-            perf_pt_set_err(err, perf_pt_cerror_ipt, -*decoder_status);
+            hwt_set_cerr(err, hwt_cerror_ipt, -*decoder_status);
             return false;
         }
 
@@ -326,7 +300,7 @@ handle_events(struct pt_block_decoder *decoder, int *decoder_status, struct perf
             case ptev_overflow:
                 // We translate the overflow event to an overflow error for
                 // Rust to detect later.
-                perf_pt_set_err(err, perf_pt_cerror_ipt, pte_overflow);
+                hwt_set_cerr(err, hwt_cerror_ipt, pte_overflow);
                 ret = false;
                 break;
             // Execution mode packet (MODE.Exec).
@@ -427,7 +401,7 @@ load_self_image(struct load_self_image_args *args)
     }
 
     if (fsync(args->vdso_fd) == -1) {
-        perf_pt_set_err(args->err, perf_pt_cerror_errno, errno);
+        hwt_set_cerr(args->err, hwt_cerror_errno, errno);
         return false;
     }
 
@@ -449,7 +423,7 @@ load_self_image_cb(struct dl_phdr_info *info, size_t size, void *data)
 
     (void) size; // Unused. Silence warning.
     struct load_self_image_args *args = data;
-    struct perf_pt_cerror *err = args->err;
+    struct hwt_cerror *err = args->err;
 
     const char *filename = info->dlpi_name;
     bool vdso = false;
@@ -481,7 +455,7 @@ load_self_image_cb(struct dl_phdr_info *info, size_t size, void *data)
         // Discussion on adding libipt support for loading from memory here:
         // https://github.com/01org/processor-trace/issues/37
         if (vdso) {
-            int rv = dump_vdso(args->vdso_fd, vaddr, phdr.p_filesz, err);
+            int rv = hwt_ipt_dump_vdso(args->vdso_fd, vaddr, phdr.p_filesz, err);
             if (!rv) {
                 return 1;
             }
@@ -498,7 +472,7 @@ load_self_image_cb(struct dl_phdr_info *info, size_t size, void *data)
 
         int rv = pt_image_add_cached(args->image, args->iscache, isid, NULL);
         if (rv < 0) {
-            perf_pt_set_err(err, perf_pt_cerror_ipt, -rv);
+            hwt_set_cerr(err, hwt_cerror_ipt, -rv);
             return 1;
         }
     }
@@ -507,34 +481,21 @@ load_self_image_cb(struct dl_phdr_info *info, size_t size, void *data)
 }
 
 /*
- * Dump the VDSO code into the open file descriptor `fd`, starting at `vaddr`
- * and of size `len` into a temp file.
- *
- * Returns true on success or false otherwise.
- */
-bool
-dump_vdso(int fd, uint64_t vaddr, size_t len, struct perf_pt_cerror *err)
-{
-    size_t written = 0;
-    while (written != len) {
-        int wrote = write(fd, (void *) vaddr + written, len - written);
-        if (wrote == -1) {
-            perf_pt_set_err(err, perf_pt_cerror_errno, errno);
-            return false;
-        }
-        written += wrote;
-    }
-
-    return true;
-}
-
-/*
  * Free a block decoder and its image.
  */
 void
-perf_pt_free_block_decoder(struct pt_block_decoder *decoder) {
+hwt_ipt_free_block_decoder(struct pt_block_decoder *decoder) {
     if (decoder != NULL) {
         pt_blk_free_decoder(decoder);
     }
 }
 
+/*
+ * Indicates if the specified error code is the overflow code.
+ * This exists to avoid copying (and keeping in sync) the ipt error code on the
+ * Rust side.
+ */
+bool
+hwt_ipt_is_overflow_err(int err) {
+    return err == pte_overflow;
+}

@@ -1,29 +1,33 @@
+#define _GNU_SOURCE
 #include "perf_pt/util.c"
-#include "perf_pt/perf_pt_private.h"
+#include "perf_pt/hwtracer_private.h"
 #include "perf_pt/collect.c"
 #include "perf_pt/decode.c"
+#include <link.h>
 //Data,Aux,Trace buffer sizes
 #define  PERF_PT_DFLT_DATA_BUFSIZE  64
 #define  PERF_PT_DFLT_AUX_BUFSIZE  1024
 #define  PERF_PT_DFLT_INITIAL_TRACE_BUFSIZE  1024 * 1024
 
-struct perf_pt_config pptConf = {
+struct hwt_perf_collector_config pptConf = {
 	.data_bufsize = PERF_PT_DFLT_DATA_BUFSIZE,
 	.aux_bufsize = PERF_PT_DFLT_AUX_BUFSIZE,
 	.initial_trace_bufsize = PERF_PT_DFLT_INITIAL_TRACE_BUFSIZE	
 };
 
-struct perf_pt_cerror pptCerror;
-struct perf_pt_trace pptTrace;
+struct hwt_cerror pptCerror;
+struct hwt_perf_trace pptTrace;
 
 char *vdsoFn= VDSO_NAME;
-const char *curr_exe = "/mnt/expansion/lnicol01/prettylady/a.out";
+const char *curr_exe = "/home/ucy-lab216/Desktop/prettylady/a.out";
 
 int main(int argc, char **argv) { 
-    struct tracer_ctx *tracer = perf_pt_init_tracer(&pptConf,&pptCerror);
+    struct  hwt_perf_ctx *tracer = hwt_perf_init_collector(&pptConf,&pptCerror);
+    if(tracer==NULL)
+         printf("Collector error");
     //printf("perf_fd %d", tracer->perf_fd);  
 
-    if(!perf_pt_start_tracer(tracer,&pptTrace,&pptCerror)){
+    if(!hwt_perf_start_collector(tracer,&pptTrace,&pptCerror)){
 	    printf("error : Starting Tracer\n");
      }
 
@@ -34,25 +38,33 @@ int main(int argc, char **argv) {
     a += 1;
     }
    
-   if(!perf_pt_stop_tracer(tracer,&pptCerror))
-	printf("errror : Stopping tracer\n"); 
-
+   if(!hwt_perf_stop_collector(tracer,&pptCerror))
+	   printf("errror : Stopping tracer\n"); 
+/*
    void *buffer =malloc(sizeof(*tracer));
+
    if(buffer == NULL)
 	   printf("insufficient space");
-   uint64_t len = sizeof(*tracer);
-   printf("%"PRIu64"\n", len);
-   int *dec_status=NULL;
-   FILE  *vdsoFd = fopen(vdsoFn, "w+");   
-   int vdsoFd_int = fileno(vdsoFd);  
-   struct pt_block_decoder *decoder = perf_pt_init_block_decoder(buffer,len,vdsoFd_int,vdsoFn,dec_status,&pptCerror,curr_exe);
 
+   uint64_t len = sizeof(*tracer);
+  */
+   //printf("%"PRIu64"\n", len);
+
+   int dec_status;
+   FILE  *vdsoFd = fopen(vdsoFn, "w+");   
+   int vdsoFd_int = fileno(vdsoFd);
+   struct pt_block_decoder *decoder = hwt_ipt_init_block_decoder(tracer->aux_buf,tracer->aux_bufsize,vdsoFd_int,vdsoFn,&dec_status,&pptCerror,curr_exe);
+
+   if(decoder==NULL)
+      printf("decoder sync error");
+
+   printf("Decoder status %d\n",dec_status);
   if(decoder == NULL)
 	printf("error: decoder initialization\n");
 
 
 
 
-   if(!perf_pt_free_tracer(tracer,&pptCerror))
+   if(!hwt_perf_free_collector(tracer,&pptCerror))
 	   printf("error: Freeing Tracer\n");
  }

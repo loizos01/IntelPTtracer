@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 2013-2022, Intel Corporation
- * SPDX-License-Identifier: BSD-3-Clause
+ * Copyright (c) 2013-2020, Intel Corporation
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -27,10 +26,10 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <pt_cpu.h>
-#include <pt_cpuid.h>
+#include "pt_cpu.h"
+#include "pt_cpuid.h"
 
-#include <intel-pt2.h>
+#include "intel-pt.h"
 
 #include <limits.h>
 #include <stdlib.h>
