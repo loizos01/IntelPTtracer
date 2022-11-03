@@ -18,6 +18,8 @@ struct hwt_perf_collector_config pptConf = {
 struct hwt_cerror pptCerror;
 struct hwt_perf_trace pptTrace;
 
+struct ptxed_stats stats;
+
 char *vdsoFn= VDSO_NAME;
 const char *curr_exe = "/home/ucy-lab216/Desktop/prettylady/a.out";
 
@@ -33,7 +35,7 @@ int main(int argc, char **argv) {
 
     //dummy code to trigger branch taken/not taken events
     int a = 0;
-    while(a < 4000) {
+    while(a < 10) {
   
     a += 1;
     }
@@ -63,17 +65,18 @@ int main(int argc, char **argv) {
       printf("error: decoder initialization\n");
 
    //printf("Decoder status %d\n",dec_status);
+   for(int i=0;i<10;i++){
+      if(!hwt_ipt_next_block(decoder,&dec_status,&first_inst,&last_inst,&pptCerror,&stats,iscacheGlobal)){
+         printf("error: getting next block");
+      }
 
-   if(!hwt_ipt_next_block(decoder,&dec_status,&first_inst,&last_inst,&pptCerror)){
-      printf("error: getting next block");
+      printf("First Instruction: 0x%lx"PRIu64" Last Instruction 0x%lx"PRIu64" \n\n\n ",first_inst,last_inst);
    }
 
-   printf("First Instruction: 0x%lx"PRIu64" Last Instruction 0x%lx"PRIu64" \n ",first_inst,last_inst);
    
+
    hwt_ipt_free_block_decoder(decoder);
 
    if(!hwt_perf_free_collector(tracer,&pptCerror))
 	   printf("error: Freeing Tracer\n");
  }
-
-

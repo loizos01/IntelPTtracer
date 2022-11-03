@@ -11,12 +11,14 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <hwtracer_util.h>
+#include "ptxed_util.c"
 
 #include "pt_cpu.c"
 #include "pt_cpuid.c"
 #include "hwtracer_private.h"
 
 #define VDSO_NAME "linux-vdso.so.1"
+struct pt_image_section_cache *iscacheGlobal; //Temporary
 
 struct load_self_image_args {
     struct pt_image *image;
@@ -37,7 +39,7 @@ static bool block_is_terminated(struct pt_block *);
 void *hwt_ipt_init_block_decoder(void *, uint64_t, int, char *, int *,
                                  struct hwt_cerror *, const char *);
 bool hwt_ipt_next_block(struct pt_block_decoder *, int *, uint64_t *,
-                        uint64_t *, struct hwt_cerror *);
+                        uint64_t *, struct hwt_cerror *,struct ptxed_stats *stats,struct  pt_image_section_cache *iscache);
 void hwt_ipt_free_block_decoder(struct pt_block_decoder *);
 
 /*
@@ -135,6 +137,7 @@ hwt_ipt_init_block_decoder(void *buf, uint64_t len, int vdso_fd, char *vdso_file
         goto clean;
     }
 
+
     // Build and load a memory image from which to recover control flow.
     struct pt_image *image = pt_image_alloc(NULL);
     if (image == NULL) {
@@ -145,6 +148,9 @@ hwt_ipt_init_block_decoder(void *buf, uint64_t len, int vdso_fd, char *vdso_file
 
     // Use image cache to speed up decoding.
     struct pt_image_section_cache *iscache = pt_iscache_alloc(NULL);
+
+    iscacheGlobal = iscache; //Temporary code
+
     if(iscache == NULL) {
         hwt_set_cerr(err, hwt_cerror_unknown, 0);
         failing = true;
@@ -187,7 +193,11 @@ clean:
  */
 bool
 hwt_ipt_next_block(struct pt_block_decoder *decoder, int *decoder_status,
-        uint64_t *first_instr, uint64_t *last_instr, struct hwt_cerror *err) {
+        uint64_t *first_instr, uint64_t *last_instr, struct hwt_cerror *err,struct ptxed_stats *stats,
+		struct  pt_image_section_cache *iscache) {
+
+    uint64_t offset;
+
     // If there are events pending, look at those first.
     if (handle_events(decoder, decoder_status, err) != true) {
         // handle_events will have already called hwt_set_cerr().
@@ -259,6 +269,10 @@ hwt_ipt_next_block(struct pt_block_decoder *decoder, int *decoder_status,
     }
     // The address of the block's last instruction.
     *last_instr = block.end_ip;
+
+    pt_blk_get_offset(decoder, &offset);
+
+    print_block(decoder, &block, stats,offset,iscache);
 
     return true;
 }
