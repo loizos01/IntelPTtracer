@@ -272,7 +272,7 @@ hwt_ipt_next_block(struct pt_block_decoder *decoder, int *decoder_status,
 
     pt_blk_get_offset(decoder, &offset);
 
-    print_block(decoder, &block, stats,offset,iscache);
+    print_block(decoder, &block, stats,offset,iscacheGlobal);
 
     return true;
 }

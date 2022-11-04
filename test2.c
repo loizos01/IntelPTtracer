@@ -35,7 +35,7 @@ int main(int argc, char **argv) {
 
     //dummy code to trigger branch taken/not taken events
     int a = 0;
-    while(a < 10) {
+    while(a < 5) {
   
     a += 1;
     }
@@ -65,12 +65,12 @@ int main(int argc, char **argv) {
       printf("error: decoder initialization\n");
 
    //printf("Decoder status %d\n",dec_status);
-   for(int i=0;i<10;i++){
+   for(int i=0;i<5;i++){
       if(!hwt_ipt_next_block(decoder,&dec_status,&first_inst,&last_inst,&pptCerror,&stats,iscacheGlobal)){
          printf("error: getting next block");
       }
 
-      printf("First Instruction: 0x%lx"PRIu64" Last Instruction 0x%lx"PRIu64" \n\n\n ",first_inst,last_inst);
+      printf("First Instruction: %016"PRIx64" Last Instruction %016"PRIx64" \n\n\n ",first_inst,last_inst);
    }
 
    

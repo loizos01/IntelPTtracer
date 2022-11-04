@@ -306,6 +306,7 @@ static void print_block(struct pt_block_decoder *decoder,
         //Updates insn with ip instruction in block.
 		errcode = block_fetch_insn(&insn, block, ip, iscache);
 		if (errcode < 0) {
+			printf("Problem fetching instruction \n");
 			printf(" [fetch error: %s]\n",
 			       pt_errstr(pt_errcode(errcode)));
 			break;
@@ -320,8 +321,9 @@ static void print_block(struct pt_block_decoder *decoder,
         //Main interface to the decoder.
 		xederrcode = xed_decode(&inst, insn.raw, insn.size);
 		if (xederrcode != XED_ERROR_NONE) {
+			
 			print_raw_insn(&insn);
-
+			
 			printf(" [xed decode error: (%u) %s]\n", xederrcode,
 			       xed_error_enum_t2str(xederrcode));
 			break;
