@@ -4,7 +4,7 @@ Hi markus,
 
 I really appreciate taking the time to take a look, this means a lot to me.
 
-The perf_pt folder contains the collect,decode and ptxed_util files. I am extending a library afound written in rust/C thats why there is some garbage code in them. Ptxed_util is a stripped down version of ptxed tool you provided with libipt.
+The perf_pt folder contains the collect,decode and ptxed_util files. I am extending a library I found written in rust/C thats why there is some garbage code in them. Ptxed_util is a stripped down version of ptxed tool you provided with libipt.
 
 test2_copy is the main file, which contains the dummy code we discussed in the issue #93. The issue am facing is what we discussed in #93
 
