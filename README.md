@@ -11,7 +11,9 @@ test2_copy is the main file, which contains the dummy code we discussed in the i
 the machine am using for development is running libipt version = ffe1631be3dad2dc286529e3e05d552043d626f0 and 
 XED_V = f7191e268c3ee17fc8c9b8d9bd3eee7159f29556
 
-This project is part of my bachelor thesis "Defending ROP attacks using Intel PT"
+This project is part of my bachelor thesis "Defending ROP attacks using Intel PT".
+
+My email is loizosnic99@gmail.com in case you would like to get in touch. I will continue debugging in hope to find the issue
 
 Thank you,
 Loizos Nicolaou
