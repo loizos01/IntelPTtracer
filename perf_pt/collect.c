@@ -631,7 +631,6 @@ hwt_perf_start_collector(struct hwt_perf_ctx *tr_ctx, struct hwt_perf_trace *tra
             goto clean;
         }
     }
-
     // Turn on tracing hardware.
     if (ioctl(tr_ctx->perf_fd, PERF_EVENT_IOC_ENABLE, 0) < 0) {
         hwt_set_cerr(err, hwt_cerror_errno, errno);

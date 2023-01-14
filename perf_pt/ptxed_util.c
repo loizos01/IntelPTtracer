@@ -7,6 +7,8 @@
 #include <pt_cpu.h>
 #include <xed-interface.h>
 
+FILE  *bufferFd;
+
 /* A collection of statistics. */
 struct ptxed_stats {
 	/* The number of instructions. */
@@ -25,6 +27,7 @@ struct ptxed_stats {
 /*
 Private Prototypes
 */
+static const char *print_exec_mode(enum pt_exec_mode mode);
 static void diagnose(struct pt_block_decoder *decoder, uint64_t ip,
 		     const char *errtype, int errcode);
 static void diagnose_block(struct pt_block_decoder *decoder,
@@ -38,6 +41,7 @@ static int block_fetch_insn(struct pt_insn *insn, const struct pt_block *block,
 			    uint64_t ip, struct pt_image_section_cache *iscache);     
 static xed_machine_mode_enum_t translate_mode(enum pt_exec_mode mode);  
 static void print_raw_insn(const struct pt_insn *insn);
+static void print_raw_insn_file(const struct pt_insn *insn);
 static void print_block(struct pt_block_decoder *decoder,
 			const struct pt_block *block,
 			const struct ptxed_stats *stats,
@@ -45,6 +49,26 @@ static void print_block(struct pt_block_decoder *decoder,
 			struct pt_image_section_cache *iscache);
 static int drain_events_block(struct pt_block_decoder *decoder, uint64_t *time,
 			      int status);                    
+
+
+static const char *print_exec_mode(enum pt_exec_mode mode)
+{
+	switch (mode) {
+	case ptem_unknown:
+		return "<unknown>";
+
+	case ptem_16bit:
+		return "16-bit";
+
+	case ptem_32bit:
+		return "32-bit";
+
+	case ptem_64bit:
+		return "64-bit";
+	}
+
+	return "<invalid>";
+}
 
 /*
 Public Prototypes
@@ -70,11 +94,35 @@ static void print_raw_insn(const struct pt_insn *insn)
 		length = sizeof(insn->raw);
 
 	for (idx = 0; idx < length; ++idx)
-		printf(" %02x", insn->raw[idx]);
+		printf("%02x",insn->raw[idx]);
 
 	for (; idx < pt_max_insn_size; ++idx)
 		printf("   ");
 }
+
+
+
+static void print_raw_insn_file(const struct pt_insn *insn)
+{
+	uint8_t length, idx;
+
+	if (!insn) {
+		printf("[internal error]");
+		return;
+	}
+
+	length = insn->size;
+	if (sizeof(insn->raw) < length)
+		length = sizeof(insn->raw);
+
+	for (idx = 0; idx < length; ++idx)
+		fprintf(bufferFd,"%02x", insn->raw[idx]);
+
+	for (; idx < pt_max_insn_size; ++idx)
+		fprintf(bufferFd,"   ");
+	fprintf(bufferFd,"\n");
+}
+
 
 static int drain_events_block(struct pt_block_decoder *decoder, uint64_t *time,
 			      int status)
@@ -196,7 +244,7 @@ static void xed_print_insn(const xed_decoded_inst_t *inst, uint64_t ip)
 		return;
 	}
 
-	printf("  %s", buffer);
+	printf(" %s ", buffer);
 }
 
 
@@ -277,11 +325,12 @@ static void print_block(struct pt_block_decoder *decoder,
 	}
 
 	mode = translate_mode(block->mode);
+	printf("%s\n",print_exec_mode(block->mode));
     //The mode, and addresses widths are enumerations that specify the number of bits. 
 	xed_state_init2(&xed, mode, XED_ADDRESS_WIDTH_INVALID);
 
 	/* There's nothing to do for empty blocks. */
-	ninsn = block->ninsn;
+	ninsn = block->ninsn+3;
 	if (!ninsn)
 		return;
 
@@ -301,7 +350,7 @@ static void print_block(struct pt_block_decoder *decoder,
 		if (block->speculative)
 			printf("? ");
 
-		printf("%016" PRIx64, ip);
+		printf("%016" PRIx64 " ", ip);
 
         //Updates insn with ip instruction in block.
 		errcode = block_fetch_insn(&insn, block, ip, iscache);
@@ -320,8 +369,12 @@ static void print_block(struct pt_block_decoder *decoder,
 
         //Main interface to the decoder.
 		xederrcode = xed_decode(&inst, insn.raw, insn.size);
+
+		print_raw_insn_file(&insn);
+		
+
+		
 		if (xederrcode != XED_ERROR_NONE) {
-			
 			print_raw_insn(&insn);
 			
 			printf(" [xed decode error: (%u) %s]\n", xederrcode,
@@ -332,21 +385,21 @@ static void print_block(struct pt_block_decoder *decoder,
 		xed_print_insn(&inst, insn.ip);
 
 		printf("\n");
-
+		
 		ninsn -= 1;
 		if (!ninsn)
 			break;
 
 		errcode = xed_next_ip(&ip, &inst, ip);
 		if (errcode < 0) {
-			diagnose(decoder, ip, "reconstruct error", errcode);
+			printf("Error before end of block\n");
+			diagnose(decoder, ip, "reconstruct error[line396]", errcode);
 			break;
 		}
 	}
-
 	/* Decode should have brought us to @block->end_ip. */
 	if (ip != block->end_ip)
-		diagnose(decoder, ip, "reconstruct error", -pte_nosync);
+		diagnose(decoder, ip, "reconstruct error[line403]", -pte_nosync);
 }
 
 static void diagnose_block(struct pt_block_decoder *decoder,
@@ -422,7 +475,6 @@ void decode_block(struct pt_block_decoder *decoder,
 			 struct  pt_image_section_cache *iscache)
 {
 	uint64_t offset, sync, time;
-
 	if (!decoder) {
 		printf("[internal error]\n");
 		return;
@@ -439,7 +491,6 @@ void decode_block(struct pt_block_decoder *decoder,
 		block.ip = 0ull;
 		block.ninsn = 0u;
 		status = pt_blk_sync_forward(decoder);
-
 		if (status < 0) {
 			uint64_t new_sync;
 			int errcode;
@@ -488,19 +539,11 @@ void decode_block(struct pt_block_decoder *decoder,
 				 * in decoding some instructions.
 				 */
 				if (block.ninsn) {
-					if (stats) {
-						stats->insn += block.ninsn;
-						stats->blocks += 1;
-					}
 					print_block(decoder, &block, stats,offset,iscache);
 				}
 				break;
 			}
 
-			if (stats) {
-				stats->insn += block.ninsn;
-				stats->blocks += 1;
-			}
 				print_block(decoder, &block, stats,offset,iscache);
 		}
 

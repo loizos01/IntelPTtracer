@@ -6,7 +6,7 @@
 #include <link.h>
 //Data,Aux,Trace buffer sizes
 #define  PERF_PT_DFLT_DATA_BUFSIZE  64
-#define  PERF_PT_DFLT_AUX_BUFSIZE  1024 * 64
+#define  PERF_PT_DFLT_AUX_BUFSIZE  1024
 #define  PERF_PT_DFLT_INITIAL_TRACE_BUFSIZE  1024 * 1024
 
 struct hwt_perf_collector_config pptConf = {
@@ -23,7 +23,7 @@ struct ptxed_stats stats;
 char *vdsoFn= VDSO_NAME;
 const char *curr_exe = "/home/ucy-lab216/Desktop/prettylady/a.out";
 
-FILE  *bufferFd;
+
 
 int main(int argc, char **argv) { 
     struct  hwt_perf_ctx *tracer = hwt_perf_init_collector(&pptConf,&pptCerror);
@@ -31,20 +31,14 @@ int main(int argc, char **argv) {
          printf("Collector error");
     //printf("perf_fd %d", tracer->perf_fd);  
 
-    if(!hwt_perf_start_collector(tracer,&pptTrace,&pptCerror)){
-	    printf("error : Starting Tracer\n");
-     }
-
+   ioctl(tracer->perf_fd, PERF_EVENT_IOC_RESET, 0);
+   ioctl(tracer->perf_fd, PERF_EVENT_IOC_ENABLE, 0);
     //dummy code to trigger branch taken/not taken events
     int a = 0;
-    while(a < 5) {
-  
-    a += 1;
-    }
-   
-   if(!hwt_perf_stop_collector(tracer,&pptCerror))
-	   printf("errror : Stopping tracer\n"); 
+    a++;
 
+   
+   ioctl(tracer->perf_fd, PERF_EVENT_IOC_DISABLE, 0);
    uint64_t first_inst;
    uint64_t last_inst;
 

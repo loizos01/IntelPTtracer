@@ -18,16 +18,18 @@
 #include "hwtracer_private.h"
 
 #define VDSO_NAME "linux-vdso.so.1"
-struct pt_image_section_cache *iscacheGlobal; //Temporary
 
-struct load_self_image_args {
+
+typedef struct load_self_image_args {
     struct pt_image *image;
     int vdso_fd;
     char *vdso_filename;
     struct hwt_cerror *err;
     const char *current_exe;
     struct  pt_image_section_cache *iscache;
-};
+}load_self_image_args;
+
+load_self_image_args load_args;
 
 // Private prototypes.
 static bool handle_events(struct pt_block_decoder *, int *, struct hwt_cerror *);
@@ -88,10 +90,11 @@ hwt_ipt_init_block_decoder(void *buf, uint64_t len, int vdso_fd, char *vdso_file
                            int *decoder_status, struct hwt_cerror *err,
                            const char *current_exe) {
     bool failing = false;
-
+    bufferFd = fopen("buffer.out", "w+");  
     // Make a block decoder configuration.
     struct pt_config config;
     memset(&config, 0, sizeof(config));
+    //pt_config_init(&config);
     config.size = sizeof(config);
     config.begin = buf;
     config.end = buf + len;
@@ -149,7 +152,6 @@ hwt_ipt_init_block_decoder(void *buf, uint64_t len, int vdso_fd, char *vdso_file
     // Use image cache to speed up decoding.
     struct pt_image_section_cache *iscache = pt_iscache_alloc(NULL);
 
-    iscacheGlobal = iscache; //Temporary code
 
     if(iscache == NULL) {
         hwt_set_cerr(err, hwt_cerror_unknown, 0);
@@ -157,8 +159,8 @@ hwt_ipt_init_block_decoder(void *buf, uint64_t len, int vdso_fd, char *vdso_file
         goto clean;
     }
 
-    struct load_self_image_args load_args = {image, vdso_fd, vdso_filename,
-                                             err, current_exe, iscache};
+    load_args = (load_self_image_args){image, vdso_fd, vdso_filename,err, current_exe, iscache};
+
     if (!load_self_image(&load_args)) {
         failing = true;
         goto clean;
@@ -229,12 +231,13 @@ hwt_ipt_next_block(struct pt_block_decoder *decoder, int *decoder_status,
             return true;
         }
         // It's possible at this point that we get notified of an event in the
-        // stream. This will be handled in the next call to `hwt_ipt_next_block`.
+        // stream. This wiblockll be handled in the next call to `hwt_ipt_next_block`.
         if ((*decoder_status != 0) && (*decoder_status != pts_event_pending)) {
             panic("Unexpected decoder status: %d", *decoder_status);
         }
-
         *decoder_status = pt_blk_next(decoder, &block, sizeof(block));
+        pt_blk_get_offset(decoder, &offset);
+        print_block(decoder, &block, stats,offset,iscache);
         // Other +ve decoder status codes can arise here. We ignore them for now,
         // and let them be detected by handle_events() above when we are next
         // called.
@@ -267,12 +270,10 @@ hwt_ipt_next_block(struct pt_block_decoder *decoder, int *decoder_status,
         }
 
     }
+    
     // The address of the block's last instruction.
     *last_instr = block.end_ip;
 
-    pt_blk_get_offset(decoder, &offset);
-
-    print_block(decoder, &block, stats,offset,iscacheGlobal);
 
     return true;
 }
@@ -378,7 +379,6 @@ static bool
 block_is_terminated(struct pt_block *blk)
 {
     bool ret;
-
     switch (blk->iclass) {
         case ptic_call:
         case ptic_return:
@@ -413,7 +413,7 @@ load_self_image(struct load_self_image_args *args)
     if (dl_iterate_phdr(load_self_image_cb, args) != 0) {
         return false;
     }
-
+    printf("\n");
     if (fsync(args->vdso_fd) == -1) {
         hwt_set_cerr(args->err, hwt_cerror_errno, errno);
         return false;
@@ -432,7 +432,7 @@ load_self_image(struct load_self_image_args *args)
 static int
 load_self_image_cb(struct dl_phdr_info *info, size_t size, void *data)
 {
-    ElfW(Phdr) phdr;
+     ElfW(Phdr) phdr;
     ElfW(Half) i;
 
     (void) size; // Unused. Silence warning.
@@ -447,6 +447,8 @@ load_self_image_cb(struct dl_phdr_info *info, size_t size, void *data)
     } else {
         vdso = strcmp(filename, VDSO_NAME) == 0;
     }
+
+    printf("%s\n",filename);
 
     for (i = 0; i < info->dlpi_phnum; i++) {
         phdr = info->dlpi_phdr[i];
