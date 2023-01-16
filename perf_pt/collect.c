@@ -363,7 +363,7 @@ open_perf(size_t aux_bufsize, struct hwt_cerror *err) {
     struct perf_event_attr attr;
     memset(&attr, 0, sizeof(attr));
     attr.size = sizeof(attr);
-    attr.size = sizeof(struct perf_event_attr);
+    //attr.size = sizeof(struct perf_event_attr);
 
     int ret = -1;
 
@@ -381,6 +381,9 @@ open_perf(size_t aux_bufsize, struct hwt_cerror *err) {
         goto clean;
     }
     attr.type = atoi(pt_type_str);
+    printf("\nIntel PT type: %d\n",attr.type );
+
+    attr.config=0x300e601;
 
     // Exclude the kernel.
     attr.exclude_kernel = 1;
@@ -529,6 +532,7 @@ hwt_perf_init_collector(struct hwt_perf_collector_config *tr_conf, struct hwt_ce
     // Data buffer is preceded by one management page (the header), hence `1 +
     // data_bufsize'.
     int page_size = getpagesize();
+    //printf("\n%d\n",page_size);
     tr_ctx->base_bufsize = (1 + tr_conf->data_bufsize) * page_size;
     tr_ctx->base_buf = mmap(NULL, tr_ctx->base_bufsize, PROT_WRITE, MAP_SHARED, tr_ctx->perf_fd, 0);
     if (tr_ctx->base_buf == MAP_FAILED) {
