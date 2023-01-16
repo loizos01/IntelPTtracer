@@ -4,6 +4,9 @@
 #include "perf_pt/collect.c"
 #include "perf_pt/decode.c"
 #include <link.h>
+
+
+
 //Data,Aux,Trace buffer sizes
 #define  PERF_PT_DFLT_DATA_BUFSIZE  64
 #define  PERF_PT_DFLT_AUX_BUFSIZE  1024
@@ -14,6 +17,17 @@ struct hwt_perf_collector_config pptConf = {
 	.aux_bufsize = PERF_PT_DFLT_AUX_BUFSIZE,
 	.initial_trace_bufsize = PERF_PT_DFLT_INITIAL_TRACE_BUFSIZE	
 };
+
+
+void write_memory(void* addr, size_t size, char* filename){
+    void* readout = malloc(size);
+    memcpy(readout, addr, size);
+    FILE* fd = fopen(filename, "wb");
+    fwrite(readout, 1, size, fd);
+    fclose(fd);
+    free(readout);
+}
+
 
 struct hwt_cerror pptCerror;
 struct hwt_perf_trace pptTrace;
@@ -39,6 +53,10 @@ int main(int argc, char **argv) {
 
    
    ioctl(tracer->perf_fd, PERF_EVENT_IOC_DISABLE, 0);
+
+   write_memory(tracer->aux_buf, tracer->aux_bufsize, "aux");
+   write_memory(tracer->base_buf, tracer->base_bufsize, "base");
+
    uint64_t first_inst;
    uint64_t last_inst;
 
@@ -46,6 +64,7 @@ int main(int argc, char **argv) {
 
    FILE  *vdsoFd = fopen(vdsoFn, "w+");   
    int vdsoFd_int = fileno(vdsoFd);
+
 
    struct pt_block_decoder *decoder = hwt_ipt_init_block_decoder(tracer->aux_buf,tracer->aux_bufsize,vdsoFd_int,vdsoFn,&dec_status,&pptCerror,curr_exe);
 
