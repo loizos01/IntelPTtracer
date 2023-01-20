@@ -5,7 +5,7 @@
 #include <inttypes.h>
 #include <errno.h>
 #include <pt_cpu.h>
-#include <xed-interface.h>
+#include <xed/xed-interface.h>
 
 FILE  *bufferFd;
 
@@ -28,21 +28,11 @@ struct ptxed_stats {
 Private Prototypes
 */
 static const char *print_exec_mode(enum pt_exec_mode mode);
-static int xed_next_ip(uint64_t *pip, const xed_decoded_inst_t *inst,
-		       uint64_t ip);
 static void xed_print_insn(const xed_decoded_inst_t *inst, uint64_t ip);
-static int block_fetch_insn(struct pt_insn *insn, const struct pt_block *block,
-			    uint64_t ip, struct pt_image_section_cache *iscache);     
 static xed_machine_mode_enum_t translate_mode(enum pt_exec_mode mode);  
 static void print_raw_insn(const struct pt_insn *insn);
 static void print_raw_insn_file(const struct pt_insn *insn);
-static void print_block(struct pt_block_decoder *decoder,
-			const struct pt_block *block,
-			const struct ptxed_stats *stats,
-			uint64_t offset,
-			struct pt_image_section_cache *iscache);
 static int drain_events_insn(struct pt_insn_decoder  *decoder,int status);               
-
 
 static const char *print_exec_mode(enum pt_exec_mode mode)
 {
@@ -62,16 +52,6 @@ static const char *print_exec_mode(enum pt_exec_mode mode)
 
 	return "<invalid>";
 }
-
-/*
-Public Prototypes
-*/
-void decode_block(struct pt_block_decoder *decoder,
-			 struct ptxed_stats *stats,
-			 struct  pt_image_section_cache *iscache);
-
-
-
 
 static void print_raw_insn(const struct pt_insn *insn)
 {
@@ -123,7 +103,6 @@ static int drain_events_insn(struct pt_insn_decoder *decoder,int status)
 		uint64_t offset;
 
 		offset = 0ull;
-
 		errcode = pt_insn_get_offset(decoder, &offset);
 		if (errcode < 0)
 			return errcode;
@@ -135,39 +114,6 @@ static int drain_events_insn(struct pt_insn_decoder *decoder,int status)
 	}
 
 	return status;
-}
-
-
-static int xed_next_ip(uint64_t *pip, const xed_decoded_inst_t *inst,
-		       uint64_t ip)
-{
-	xed_uint_t length, disp_width;
-
-	if (!pip || !inst)
-		return -pte_internal;
-
-	length = xed_decoded_inst_get_length(inst);
-	if (!length) {
-		printf("[xed error: failed to determine instruction length]\n");
-		return -pte_bad_insn;
-	}
-
-	ip += length;
-
-	/* If it got a branch displacement it must be a branch.
-	 *
-	 * This includes conditional branches for which we don't know whether
-	 * they were taken.  The next IP won't be used in this case as a
-	 * conditional branch ends a block.  The next block will start with the
-	 * correct IP.
-	 */
-	disp_width = xed_decoded_inst_get_branch_displacement_width(inst);
-	if (disp_width)
-		ip += (uint64_t) (int64_t)
-			xed_decoded_inst_get_branch_displacement(inst);
-
-	*pip = ip;
-	return 0;
 }
 
 static void xed_print_insn(const xed_decoded_inst_t *inst, uint64_t ip)
@@ -211,44 +157,6 @@ static void xed_print_insn(const xed_decoded_inst_t *inst, uint64_t ip)
 	printf(" %s ", buffer);
 }
 
-
-
-static int block_fetch_insn(struct pt_insn *insn, const struct pt_block *block,
-			    uint64_t ip, struct pt_image_section_cache *iscache)
-{
-	if (!insn || !block)
-		return -pte_internal;
-
-	/* We can't read from an empty block. */
-	if (!block->ninsn)
-		return -pte_invalid;
-
-	memset(insn, 0, sizeof(*insn));
-	insn->mode = block->mode;
-	insn->isid = block->isid;
-	insn->ip = ip;
-
-	/* The last instruction in a block may be truncated. */
-	if ((ip == block->end_ip) && block->truncated) {
-		if (!block->size || (sizeof(insn->raw) < (size_t) block->size))
-			return -pte_bad_insn;
-
-		insn->size = block->size;
-		memcpy(insn->raw, block->raw, insn->size);
-	} else {
-		int size;
-
-		size = pt_iscache_read(iscache, insn->raw, sizeof(insn->raw),
-				       insn->isid, ip);
-		if (size < 0)
-			return size;
-
-		insn->size = (uint8_t) size;
-	}
-
-	return 0;
-}
-
 /*
 Identifies processor instruction set mode that we are decoding
 */
@@ -267,7 +175,6 @@ static xed_machine_mode_enum_t translate_mode(enum pt_exec_mode mode)
 	case ptem_64bit:
 		return XED_MACHINE_MODE_LONG_64;
 	}
-
 	return XED_MACHINE_MODE_INVALID;
 }
 
@@ -280,6 +187,7 @@ static void print_insn(const struct pt_insn *insn, xed_state_t *xed, uint64_t of
 		return;
 	}
 
+	print_exec_mode(insn->mode);
 	//printf("%016" PRIx64 " ", offset);
 
 	printf("%016" PRIx64, insn->ip);

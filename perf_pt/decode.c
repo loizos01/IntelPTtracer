@@ -221,6 +221,7 @@ hwt_ipt_next_block(struct pt_block_decoder *decoder, int *decoder_status,
     block.iclass = ptic_other;
     bool first_block = true;
     *last_instr = 0;
+    xed_tables_init();
     while (!block_is_terminated(&block)) {
         if (handle_events(decoder, decoder_status, err) != true) {
             // handle_events will have already called hwt_set_cerr().

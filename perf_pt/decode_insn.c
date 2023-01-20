@@ -139,6 +139,7 @@ hwt_ipt_init_inst_decoder(void *buf, uint64_t len, int vdso_fd, char *vdso_filen
         goto clean;
     }
 
+
     // Build and load a memory image from which to recover control flow.
     struct pt_image *image = pt_image_alloc(NULL);
     if (image == NULL) {
@@ -146,12 +147,11 @@ hwt_ipt_init_inst_decoder(void *buf, uint64_t len, int vdso_fd, char *vdso_filen
         failing = true;
         goto clean;
     }
-
     // Use image cache to speed up decoding.
     struct pt_image_section_cache *iscache = pt_iscache_alloc(NULL);
 
 
-    if(iscache == NULL) {
+  if(iscache == NULL) {
         hwt_set_cerr(err, hwt_cerror_unknown, 0);
         failing = true;
         goto clean;
@@ -195,51 +195,51 @@ bool
 hwt_ipt_print_inst(struct pt_insn_decoder *decoder, int *decoder_status, struct hwt_cerror *err,struct ptxed_stats *stats,struct  pt_image_section_cache *iscache) {
     xed_state_t xed;
     uint64_t offset, sync;
+
     xed_state_zero(&xed);
+
     offset = 0ull;
-    sync = 0ull;
     int errcode;
+
     int status = *decoder_status;
     struct pt_insn insn;
+    	
+    	 xed_tables_init();
+
 	/* Initialize the IP - we use it for error reporting. */
 	insn.ip = 0ull;
 
 		for (;;) {
 			status = drain_events_insn(decoder, status);
-			if (status < 0)
-                break;				
+			if (status < 0){
+                printf("Drain Events error");
+                break;
+            }
+              			
 
 			if (status & pts_eos) {
-					printf("[end of trace]\n");
-
-				status = -pte_eos;
+				printf("[End of trace]\n");
 				break;
 			}
 
-            	errcode = pt_insn_get_offset(decoder, &offset);
-				if (errcode < 0)
-					break;
-
+           	errcode = pt_insn_get_offset(decoder, &offset);
+			if (errcode < 0){
+                printf("Get offset error");
+                break;
+            }
+				
 			status = pt_insn_next(decoder, &insn, sizeof(insn));
 			if (status < 0) {
 				/* Even in case of errors, we may have succeeded
 				 * in decoding the current instruction.
 				 */
 				print_insn(&insn, &xed,offset);
-                    /*
-					if (stats)
-						stats->insn += 1;
-
-					if (options->check)
-						check_insn(&insn, offset);
-                        */
+                printf("Error fetching instruction\n");
 				}
-           	print_insn(&insn, &xed, offset);
-            print_raw_insn_file(&insn);
+
+           		print_insn(&insn, &xed, offset);
+    		    print_raw_insn_file(&insn);
 		}
-
-
-		
 
 		/* We shouldn't break out of the loop without an error. */
 		if (!status)
@@ -247,9 +247,7 @@ hwt_ipt_print_inst(struct pt_insn_decoder *decoder, int *decoder_status, struct 
 
 		/* We're done when we reach the end of the trace stream. */
 		if (status == -pte_eos)
-            printf("error with ent");
-    
-
+            printf("Error with end of trace stream\n");
     return true;
 }
 

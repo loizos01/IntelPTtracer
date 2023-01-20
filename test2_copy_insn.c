@@ -48,9 +48,11 @@ int main(int argc, char **argv) {
    ioctl(tracer->perf_fd, PERF_EVENT_IOC_RESET, 0);
    ioctl(tracer->perf_fd, PERF_EVENT_IOC_ENABLE, 0);
 
-
-    int a = 0;
+   int a=0;
+   for(int i=0;i<4;i++){
     a++;
+   }
+  
    ioctl(tracer->perf_fd, PERF_EVENT_IOC_DISABLE, 0);
 
 

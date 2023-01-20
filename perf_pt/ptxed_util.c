@@ -5,7 +5,7 @@
 #include <inttypes.h>
 #include <errno.h>
 #include <pt_cpu.h>
-#include <xed-interface.h>
+#include <xed/xed-interface.h>
 
 FILE  *bufferFd;
 
