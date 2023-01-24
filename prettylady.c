@@ -54,12 +54,12 @@ main(int argc, char **argv)
     struct perf_event_attr attr;
 
     memset(&attr, 0, sizeof(attr));
-    attr.type = 9; /* /sys/bus/event_source/devices/intel_pt/type Intel PT PMU type */
+    attr.type = 8; /* /sys/bus/event_source/devices/intel_pt/type Intel PT PMU type */
     attr.size = sizeof(attr);
     attr.config = 0x300e601; // perf record -e intel_pt// Find in header of perf.data
     attr.disabled = 1;
     attr.exclude_kernel = 1;
-    attr.sample_type= 0x10086;
+    //attr.inherit=1;
    if (argc <= 1)
         FATAL("too few arguments: %d", argc);
 
@@ -73,8 +73,6 @@ main(int argc, char **argv)
              * attaches and allows us to continue. */
             execvp(argv[1], argv + 1);
             FATAL("%s", strerror(errno));
-	    
-
     }
 
     /* parent */
