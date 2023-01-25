@@ -52,23 +52,24 @@ const char *curr_exe = "/home/ucy-lab216/Desktop/prettylady/dummy.out";
 
 int main(int argc, char **argv) { 
 
-char line[15];
-FILE *cmd = popen("pidof dummy.out", "r");
+   if (argc <= 1)
+        FATAL("too few arguments: %d", argc);
 
-fgets(line, 15, cmd);
-pid_t traceepid = strtoul(line, NULL, 10);
-printf("%d\n",traceepid);
-pclose(cmd);
+    pid_t traceepid = fork();
+    switch (traceepid) {
+        case -1: /* error */
+            FATAL("%s", strerror(errno));
+        case 0:  /* child */
+            ptrace(PTRACE_TRACEME, 0, 0, 0);
+            /* Because we're now a tracee, execvp will block until the parent
+             * attaches and allows us to continue. */
+            execvp(argv[1], argv + 1);
+            FATAL("%s", strerror(errno));
+    }
 
-//Attach on tracee
-ptrace(PTRACE_ATTACH, traceepid, 0, 0);
 
 //Wait for tracee to stop
-pid_t tracee= waitpid(traceepid, 0, 0);
-if(tracee!=traceepid){
-   printf("Error stopping tracee");
-   return 0;
-}
+waitpid(traceepid, 0, 0);
 
 ptrace(PTRACE_SETOPTIONS, traceepid, 0, PTRACE_O_TRACEEXIT);
 
@@ -85,23 +86,26 @@ if(tracer==NULL)
 
 printf("perf_fd %d\n", tracer->perf_fd);  
 
-//DUMMY
+//Skip syscalls until we land in main
+for(int i=0;i<14;i++){
+   /* Enter next system call */
+   if (ptrace(PTRACE_SYSCALL, traceepid, 0, 0) == -1)
+      FATAL("%s", strerror(errno));
 
-/* Enter next system call */
-if (ptrace(PTRACE_SYSCALL, traceepid, 0, 0) == -1)
-   FATAL("%s", strerror(errno));
+   if (waitpid(traceepid, 0, 0) == -1)
+      FATAL("%s", strerror(errno));
 
-if (waitpid(traceepid, 0, 0) == -1)
-    FATAL("%s", strerror(errno));
+   /* Gather system call arguments */
+   struct user_regs_struct regs;
+   if (ptrace(PTRACE_GETREGS, traceepid, 0, &regs) == -1)
+      FATAL("%s", strerror(errno));
 
-/* Enter next system call */
-if (ptrace(PTRACE_SYSCALL, traceepid, 0, 0) == -1)
-   FATAL("%s", strerror(errno));
-
-if (waitpid(traceepid, 0, 0) == -1)
-    FATAL("%s", strerror(errno));
-
-//for(int i=0;i<2;i++){
+   /* Run system call and stop on exit */
+   if (ptrace(PTRACE_SYSCALL, traceepid, 0, 0) == -1)
+      FATAL("%s", strerror(errno));
+   if (waitpid(traceepid, 0, 0) == -1)
+      FATAL("%s", strerror(errno));
+}
 
 
 ioctl(tracer->perf_fd, PERF_EVENT_IOC_RESET, 0);
@@ -114,20 +118,30 @@ if (ptrace(PTRACE_SYSCALL, traceepid, 0, 0) == -1)
 if (waitpid(traceepid, 0, 0) == -1)
     FATAL("%s", strerror(errno));
 
+ioctl(tracer->perf_fd, PERF_EVENT_IOC_DISABLE, 0);
+
  /* Gather system call arguments */
 struct user_regs_struct regs;
 if (ptrace(PTRACE_GETREGS, traceepid, 0, &regs) == -1)
    FATAL("%s", strerror(errno));
 
 long syscall = regs.orig_rax;
-	
 /* Print a representation of the system call */
 fprintf(stderr, "%ld(%ld, %ld, %ld, %ld, %ld, %ld)\n",
                 syscall,
                 (long)regs.rdi, (long)regs.rsi, (long)regs.rdx,
        		(long)regs.r10, (long)regs.r8,  (long)regs.r9);
 
-ioctl(tracer->perf_fd, PERF_EVENT_IOC_DISABLE, 0);
+struct pt_insn_decoder *decoder = hwt_ipt_init_inst_decoder(tracer->aux_buf,tracer->aux_bufsize,vdsoFd_int,vdsoFn,&dec_status,&pptCerror,curr_exe);
+if(decoder==NULL)
+   printf("error: decoder initialization\n");
+
+write_memory(tracer->aux_buf, tracer->aux_bufsize, "aux");
+write_memory(tracer->base_buf, tracer->base_bufsize, "base");
+
+if(!hwt_ipt_print_inst(decoder,&dec_status,&pptCerror,&stats,load_args.iscache)){
+   printf("error: printing instructions");
+}
 
 
 /* Run system call and stop on exit */
@@ -137,21 +151,6 @@ if (waitpid(traceepid, 0, 0) == -1)
    FATAL("%s", strerror(errno));
    
 //}
-
-write_memory(tracer->aux_buf, tracer->aux_bufsize, "aux");
-write_memory(tracer->base_buf, tracer->base_bufsize, "base");
-
-
-
-struct pt_insn_decoder *decoder = hwt_ipt_init_inst_decoder(tracer->aux_buf,tracer->aux_bufsize,vdsoFd_int,vdsoFn,&dec_status,&pptCerror,curr_exe);
-if(decoder==NULL)
-   printf("error: decoder initialization\n");
-
-if(!hwt_ipt_print_inst(decoder,&dec_status,&pptCerror,&stats,load_args.iscache)){
-   printf("error: printing instructions");
-}
-return 0;
-
 
 /*
    write_memory(tracer->aux_buf, tracer->aux_bufsize, "aux");
@@ -169,8 +168,7 @@ return 0;
 
    //decode_block(decoder,&stats,load_args.iscache);
    
-   //while(true){}
-   hwt_ipt_free_insn_decoder(decoder);
+hwt_ipt_free_insn_decoder(decoder);
 
    if(!hwt_perf_free_collector(tracer,&pptCerror))
 	   printf("error: Freeing Tracer\n");
