@@ -13,6 +13,8 @@
 #include <hwtracer_util.h>
 #include "ptxed_util_insn_tracee.c"
 
+#include "analyse_exec_flow.c"
+
 #include "pt_cpu.c"
 #include "pt_cpuid.c"
 #include "hwtracer_private.h"
@@ -31,6 +33,9 @@ typedef struct load_self_image_args {
 }load_self_image_args;
 
 load_self_image_args load_args;
+
+
+struct pt_insn execInst[1000000];
 
 // Private prototypes.
 
@@ -118,10 +123,12 @@ hwt_ipt_init_inst_decoder(void *buf, uint64_t len, int vdso_fd, char *vdso_filen
                            const char *current_exe) {
     bool failing = false;
     bufferFd = fopen("buffer.out", "w+");  
-    // Make a block decoder configuration.
+
     struct pt_config config;
     memset(&config, 0, sizeof(config));
+
     //pt_config_init(&config);
+    
     config.size = sizeof(config);
     config.begin = buf;
     config.end = buf + len;
@@ -166,7 +173,6 @@ hwt_ipt_init_inst_decoder(void *buf, uint64_t len, int vdso_fd, char *vdso_filen
         goto clean;
     }
 
-
     // Build and load a memory image from which to recover control flow.
     struct pt_image *image = pt_image_alloc(NULL);
     if (image == NULL) {
@@ -184,11 +190,9 @@ hwt_ipt_init_inst_decoder(void *buf, uint64_t len, int vdso_fd, char *vdso_filen
         goto clean;
     }
 
-
-
-
     int64_t base;
 	base = 0ull;
+
 	int errcode = extract_base(current_exe, &base);
 	if (errcode < 0){
         printf("Error: Extracting base");
@@ -196,7 +200,6 @@ hwt_ipt_init_inst_decoder(void *buf, uint64_t len, int vdso_fd, char *vdso_filen
         failing = true;
         goto clean;
     }
-
 
 	errcode = load_elf(iscache, image, current_exe, base,"ptxed_util");
 /*
@@ -246,22 +249,24 @@ hwt_ipt_print_inst(struct pt_insn_decoder *decoder, int *decoder_status, struct 
 
     int status = *decoder_status;
     struct pt_insn insn;
+    //printf("\n %ld \n",sizeof(insn));
     	
-    	 xed_tables_init();
+    xed_tables_init();
+    
+    int counter=0;
 
 	/* Initialize the IP - we use it for error reporting. */
 	insn.ip = 0ull;
-
 		for (;;) {
 			status = drain_events_insn(decoder, status);
 			if (status < 0){
-                printf("Drain Events error");
+                printf("Drain Events error ");
                 break;
             }
               			
 
 			if (status & pts_eos) {
-				printf("[End of trace]\n");
+				//printf("[End of trace]\n");
 				break;
 			}
 
@@ -276,21 +281,35 @@ hwt_ipt_print_inst(struct pt_insn_decoder *decoder, int *decoder_status, struct 
 				/* Even in case of errors, we may have succeeded
 				 * in decoding the current instruction.
 				 */
-				print_insn(&insn, &xed,offset);
+			    print_insn(&insn, &xed,offset);
                 printf("Error fetching instruction\n");
-				}
+			}
 
-           		print_insn(&insn, &xed, offset);
-    		    print_raw_insn_file(&insn);
+            execInst[counter]=insn;
+            counter++;
+
+           	//print_insn(&insn, &xed, offset);
+    		//print_raw_insn_file(&insn);
 		}
-
 		/* We shouldn't break out of the loop without an error. */
 		if (!status)
 			status = -pte_internal;
 
 		/* We're done when we reach the end of the trace stream. */
-		if (status == -pte_eos)
+		if (status == -pte_eos){
             printf("Error with end of trace stream\n");
+            return false;
+        }
+
+    if(counter > 1000000){
+        printf("Counter too large");
+        return 0;
+    }
+    if(!exec_flow_analysis(execInst,counter)){
+        printf("Rop chain detected\n");
+    }else{
+        printf("Syscall safe\n");
+    }
     return true;
 }
 

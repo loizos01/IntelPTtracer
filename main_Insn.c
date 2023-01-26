@@ -86,27 +86,10 @@ if(tracer==NULL)
 
 printf("perf_fd %d\n", tracer->perf_fd);  
 
-//Skip syscalls until we land in main
-for(int i=0;i<14;i++){
-   /* Enter next system call */
-   if (ptrace(PTRACE_SYSCALL, traceepid, 0, 0) == -1)
-      FATAL("%s", strerror(errno));
+struct pt_insn_decoder *decoder;
+bool first=true;
 
-   if (waitpid(traceepid, 0, 0) == -1)
-      FATAL("%s", strerror(errno));
-
-   /* Gather system call arguments */
-   struct user_regs_struct regs;
-   if (ptrace(PTRACE_GETREGS, traceepid, 0, &regs) == -1)
-      FATAL("%s", strerror(errno));
-
-   /* Run system call and stop on exit */
-   if (ptrace(PTRACE_SYSCALL, traceepid, 0, 0) == -1)
-      FATAL("%s", strerror(errno));
-   if (waitpid(traceepid, 0, 0) == -1)
-      FATAL("%s", strerror(errno));
-}
-
+for(;;){
 
 ioctl(tracer->perf_fd, PERF_EVENT_IOC_RESET, 0);
 ioctl(tracer->perf_fd, PERF_EVENT_IOC_ENABLE, 0);
@@ -131,31 +114,46 @@ fprintf(stderr, "%ld(%ld, %ld, %ld, %ld, %ld, %ld)\n",
                 syscall,
                 (long)regs.rdi, (long)regs.rsi, (long)regs.rdx,
        		(long)regs.r10, (long)regs.r8,  (long)regs.r9);
-
-struct pt_insn_decoder *decoder = hwt_ipt_init_inst_decoder(tracer->aux_buf,tracer->aux_bufsize,vdsoFd_int,vdsoFn,&dec_status,&pptCerror,curr_exe);
-if(decoder==NULL)
-   printf("error: decoder initialization\n");
-
+/*
 write_memory(tracer->aux_buf, tracer->aux_bufsize, "aux");
 write_memory(tracer->base_buf, tracer->base_bufsize, "base");
+*/
+
+if(first){
+   first=false;
+   decoder = hwt_ipt_init_inst_decoder(tracer->aux_buf,tracer->aux_bufsize,vdsoFd_int,vdsoFn,&dec_status,&pptCerror,curr_exe);
+   if(decoder==NULL)
+      printf("error: decoder initialization\n");
+}else{
+   int dec_status = pt_insn_sync_set(decoder,0);
+    if (dec_status == -pte_eos) {
+        // There were no blocks in the stream. The user will find out on next
+        // call to hwt_ipt_next_block().
+        printf("no blocks");
+    } else if (dec_status < 0) {
+       printf("sync error");
+    }
+}
 
 if(!hwt_ipt_print_inst(decoder,&dec_status,&pptCerror,&stats,load_args.iscache)){
    printf("error: printing instructions");
 }
-
 
 /* Run system call and stop on exit */
 if (ptrace(PTRACE_SYSCALL, traceepid, 0, 0) == -1)
    FATAL("%s", strerror(errno));
 if (waitpid(traceepid, 0, 0) == -1)
    FATAL("%s", strerror(errno));
-   
-//}
+
+} //End loop
+
+
 
 /*
    write_memory(tracer->aux_buf, tracer->aux_bufsize, "aux");
    write_memory(tracer->base_buf, tracer->base_bufsize, "base");
 */ 
+   
    /*
    printf("\n%ld\n",tracer->aux_bufsize);
    printf("\n%ld\n",tracer->base_bufsize);
@@ -167,9 +165,8 @@ if (waitpid(traceepid, 0, 0) == -1)
 
 
    //decode_block(decoder,&stats,load_args.iscache);
-   
 hwt_ipt_free_insn_decoder(decoder);
 
-   if(!hwt_perf_free_collector(tracer,&pptCerror))
+if(!hwt_perf_free_collector(tracer,&pptCerror))
 	   printf("error: Freeing Tracer\n");
  }
