@@ -1,0 +1,9 @@
+Libipt: https://github.com/intel/libipt
+
+XED: https://github.com/intelxed/xed
+
+Compile dummy:
+sudo gcc -no-pie -static ./dummy.c -o dummy.out
+
+Compile main:
+sudo gcc -L /usr/local/lib/ main.c  -lipt -lxed
