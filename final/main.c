@@ -220,7 +220,7 @@ int main(int argc, char **argv)
 
       if (!decode_trace(decoder, &dec_status, &stats))
       {
-         printf("error: printing instructions");
+         printf("error: decoding trace");
       }
 
       /* Run system call and stop on exit */

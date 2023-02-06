@@ -2,29 +2,28 @@
 
 #include <stdio.h>
 #include <intel-pt.h>
+#include <stdbool.h>
 
-bool exec_flow_analysis(struct pt_insn *execInst, int count)
+bool exec_flow_analysis(struct pt_insn *execInstArr, int instCnt)
 {
-    int flag = 0;
 
-    for (int i = count - 1; i > -1; i--)
+    int cnt = 0;
+    for (int i = instCnt - 1; i > -1; i--)
     {
-        switch (execInst[i].iclass)
+        switch (execInstArr[i].iclass)
         {
         case ptic_far_call: // SYSCALL, SYSENTER, or FAR CALL
-            flag = 1;
+            cnt = 1;
+	        break;
         case ptic_call: // Near (function) call
-            if (flag == 1)
-            {
+            cnt--;
+            if(cnt==0)
                 return true;
-            }
             break;
         case ptic_return: // Near (function) return
-            if (flag == 1)
-            {
-                return false;
-            }
+            cnt++;
             break;
         }
     }
+    return false;
 }
