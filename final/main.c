@@ -189,6 +189,8 @@ int main(int argc, char **argv)
                  (long)regs.rdi, (long)regs.rsi, (long)regs.rdx,
                  (long)regs.r10, (long)regs.r8, (long)regs.r9);
       }
+        int j=0;
+        scanf("%d",&j);
 
       if (stats.pbuff)
       {

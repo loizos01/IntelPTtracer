@@ -249,7 +249,9 @@ bool decode_trace(struct pt_insn_decoder *decoder, int *decoder_status, struct s
 
         if (stats->praw)
             print_raw_insn_file(&insn);
+
     }
+
     /* We shouldn't break out of the loop without an error. */
     if (!status)
         status = -pte_internal;
@@ -274,7 +276,7 @@ bool decode_trace(struct pt_insn_decoder *decoder, int *decoder_status, struct s
     if (!exec_flow_analysis(execInst, counter))
     {
         printf("Rop chain detected\n");
-        return 0;
+        return false;
     }
     else
     {
