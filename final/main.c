@@ -44,11 +44,13 @@ void print_help()
 {
    printf("usage: ./a.out [<Path to Tracee elf file>] [<options>]\n\n");
    printf("options:\n\n");
+   printf("--depth [numOfInstructions]          preceding number of instructions to check");
    printf("--pinfo                              print Intel Pt information\n");
    printf("--pinst                              print traced instructions in x86[-64]\n");
    printf("--pbuff                              print AUX and Base buffers\n");
    printf("--praw                               print raw instructions in buffer.out file\n");
    printf("--psyscall                           print system call chain\n\n");
+   printf("--step ");
    return;
 }
 
@@ -77,6 +79,17 @@ int main(int argc, char **argv)
             return 0;
             continue;
          }
+         if (strcmp(arg, "--depth") == 0)
+         {
+            if (argc <= i) {
+				fprintf(stderr,
+					"--depth: missing argument.\n");
+               return 1;
+			   }
+            stats.limited=true;
+			   stats.depth = atoi(argv[++i]);
+            continue;
+         }
          if (strcmp(arg, "--pinfo") == 0)
          {
             stats.pinfo = true;
@@ -100,6 +113,11 @@ int main(int argc, char **argv)
          if (strcmp(arg, "--psyscall") == 0)
          {
             stats.psyscall = true;
+            continue;
+         }
+         if (strcmp(arg, "--step") == 0)
+         {
+            stats.step = true;
             continue;
          }
 
@@ -188,9 +206,11 @@ int main(int argc, char **argv)
                  syscall,
                  (long)regs.rdi, (long)regs.rsi, (long)regs.rdx,
                  (long)regs.r10, (long)regs.r8, (long)regs.r9);
+         if(stats.step){
+             printf("Press any character to continue\n");
+             getchar();
+         }
       }
-        int j=0;
-        scanf("%d",&j);
 
       if (stats.pbuff)
       {
@@ -221,9 +241,15 @@ int main(int argc, char **argv)
       }
 
       if (!decode_trace(decoder, &dec_status, &stats))
-      {
-         printf("error: decoding trace");
+         {
+            ptrace(PTRACE_KILL, traceepid, 0, 0);
+            return 0;
+         } 
+      if(stats.step){
+         printf("Press any character to continue\n");
+         getchar();
       }
+      
 
       /* Run system call and stop on exit */
       if (ptrace(PTRACE_SYSCALL, traceepid, 0, 0) == -1)

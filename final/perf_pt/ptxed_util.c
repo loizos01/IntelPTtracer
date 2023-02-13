@@ -107,11 +107,6 @@ static int drain_events_insn(struct pt_insn_decoder *decoder, int status)
 		struct pt_event event;
 		uint64_t offset;
 
-		offset = 0ull;
-		errcode = pt_insn_get_offset(decoder, &offset);
-		if (errcode < 0)
-			return errcode;
-
 		status = pt_insn_event(decoder, &event, sizeof(event));
 		if (status < 0)
 			return status;

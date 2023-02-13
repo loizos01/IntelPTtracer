@@ -8,7 +8,13 @@ bool exec_flow_analysis(struct pt_insn *execInstArr, int instCnt)
 {
 
     int cnt = 1;
-    for (int i = instCnt - 1; i > -1; i--)
+    int stop= -1;
+
+    if(stats.limited && stats.depth<instCnt){
+        stop = instCnt-stats.depth-1;
+    }
+
+    for (int i= instCnt - 1;i >stop; i--)
     {
         switch (execInstArr[i].iclass)
         {
@@ -21,7 +27,7 @@ bool exec_flow_analysis(struct pt_insn *execInstArr, int instCnt)
         }
     }
     printf("\n%d\n",cnt);
-    if(cnt==0)
+    if(cnt<10)
         return true;
 
     return false;

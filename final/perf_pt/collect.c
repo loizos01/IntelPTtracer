@@ -43,6 +43,9 @@ struct stats_config
     bool pbuff;
     bool praw;
     bool psyscall;
+    bool step;
+    bool limited;
+    int depth;
 } stats;
 
 struct perf_collector_config
