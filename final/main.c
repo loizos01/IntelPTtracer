@@ -9,8 +9,14 @@
 #include <sys/user.h>
 #include <link.h>
 
+#include <time.h>
+
 #include "perf_pt/collect.c"
 #include "perf_pt/decode.c"
+
+
+//Compile
+// gcc -L /usr/local/lib/ main.c  -lipt -lxed
 
 #define FATAL(...)                             \
    do                                          \
@@ -24,6 +30,10 @@
 #define PERF_PT_DFLT_DATA_BUFSIZE 64
 #define PERF_PT_DFLT_AUX_BUFSIZE 1024
 #define PERF_PT_DFLT_INITIAL_TRACE_BUFSIZE 1024 * 1024
+
+#define MAXLIST 100
+
+char* parsedArgs[MAXLIST];
 
 struct perf_collector_config pptConf = {
     .data_bufsize = PERF_PT_DFLT_DATA_BUFSIZE,
@@ -44,28 +54,39 @@ void print_help()
 {
    printf("usage: ./a.out [<Path to Tracee elf file>] [<options>]\n\n");
    printf("options:\n\n");
-   printf("--depth [numOfInstructions]          preceding number of instructions to check");
+   printf("--depth [numOfInstructions]          preceding number of instructions to check\n");
    printf("--pinfo                              print Intel Pt information\n");
    printf("--pinst                              print traced instructions in x86[-64]\n");
    printf("--pbuff                              print AUX and Base buffers\n");
    printf("--praw                               print raw instructions in buffer.out file\n");
-   printf("--psyscall                           print system call chain\n\n");
-   printf("--step ");
+   printf("--psyscall                           print system call chain\n");
+   printf("--step                               Step through the syscalls\n");
+   printf("--ptracetime                         print intel Pt trace time and exit\n");
+   printf("--panalysetime                       print analysis time\n\n");
    return;
 }
 
 int main(int argc, char **argv)
 {
+   int pArgs=0;
+   
+   clock_t begin;
+   clock_t end;
+   double time_spent;
 
    if (argc <= 1)
       FATAL("too few arguments: %d", argc);
 
-   if (argc > 2)
+   if (argc > 1)
    {
-      for (int i = 2; i < argc; i++)
-      {
-         char *arg;
+      char *arg;
+
+      int i=0;
+      for(i=1;i<argc;i++){
          arg = argv[i];
+
+         if(arg[0]!='-')
+            break;
 
          if (strcmp(arg, "--help") == 0)
          {
@@ -82,12 +103,12 @@ int main(int argc, char **argv)
          if (strcmp(arg, "--depth") == 0)
          {
             if (argc <= i) {
-				fprintf(stderr,
-					"--depth: missing argument.\n");
+            fprintf(stderr,
+               "--depth: missing argument.\n");
                return 1;
-			   }
+            }
             stats.limited=true;
-			   stats.depth = atoi(argv[++i]);
+            stats.depth = atoi(argv[++i]);
             continue;
          }
          if (strcmp(arg, "--pinfo") == 0)
@@ -120,10 +141,22 @@ int main(int argc, char **argv)
             stats.step = true;
             continue;
          }
+         if (strcmp(arg, "--ptracetime") == 0)
+         {
+            stats.ptracetime = true;
+            continue;
+         }
+         if (strcmp(arg, "--panalysetime") == 0)
+         {
+            stats.panalysetime = true;
+            continue;
+         }
 
          printf("unknown option: %s\n", arg);
          return 0;
       }
+
+      pArgs=i;
    }
 
    pid_t traceepid = fork();
@@ -136,7 +169,7 @@ int main(int argc, char **argv)
       ptrace(PTRACE_TRACEME, 0, 0, 0);
       /* Because we're now a tracee, execvp will block until the parent
        * attaches and allows us to continue. */
-      execvp(argv[1], argv + 1);
+      execvp(argv[pArgs], argv+(pArgs+1));
       FATAL("%s", strerror(errno));
    }
 
@@ -149,6 +182,7 @@ int main(int argc, char **argv)
    struct pt_insn_decoder *decoder;
    bool first = true;
 
+   //
    struct perf_ctx *tracer = perf_init_collector(&pptConf, traceepid, &stats);
    if (tracer == NULL)
       printf("Collector error");
@@ -163,7 +197,30 @@ int main(int argc, char **argv)
       printf("Aux Buffer size: %ld\n", tracer->aux_bufsize);
       printf("Base Buffer size: %ld\n", tracer->base_bufsize);
    }
+   
+   //Prints the time it takes to trace the program
+   if(stats.ptracetime){
+         
+         ioctl(tracer->perf_fd, PERF_EVENT_IOC_RESET, 0);
+         ioctl(tracer->perf_fd, PERF_EVENT_IOC_ENABLE, 0);
 
+         begin =clock();
+         ptrace(PTRACE_CONT,traceepid,0,0);
+         end =clock();
+
+         ioctl(tracer->perf_fd, PERF_EVENT_IOC_DISABLE, 0);
+
+         time_spent = (double)(end-begin) / CLOCKS_PER_SEC;
+         printf("%f second\n",time_spent);
+
+         return 0;
+   }
+
+   if(stats.panalysetime){
+      begin=clock();
+   }
+
+   //Main tracing loop
    for (;;)
    {
       ioctl(tracer->perf_fd, PERF_EVENT_IOC_RESET, 0);
@@ -221,7 +278,7 @@ int main(int argc, char **argv)
       if (first)
       {
          first = false;
-         decoder = init_inst_decoder(tracer->aux_buf, tracer->aux_bufsize, &dec_status, argv[1], &stats);
+         decoder = init_inst_decoder(tracer->aux_buf, tracer->aux_bufsize, &dec_status, argv[pArgs], &stats);
          if (decoder == NULL)
             printf("error: decoder initialization\n");
       }
@@ -268,6 +325,14 @@ int main(int argc, char **argv)
       }
 
    } // End loop
+
+
+   if(stats.panalysetime){
+      end=clock();
+      time_spent = (double)(end-begin) / CLOCKS_PER_SEC;
+      printf("%f second\n",time_spent);
+
+   }
 
    printf("No attacks found!\n");
 

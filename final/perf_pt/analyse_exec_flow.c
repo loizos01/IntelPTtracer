@@ -26,7 +26,7 @@ bool exec_flow_analysis(struct pt_insn *execInstArr, int instCnt)
             break;
         }
     }
-    printf("\n%d\n",cnt);
+    //printf("Call/Ret Ibalance\n%d\n",cnt);
     if(cnt<10)
         return true;
 

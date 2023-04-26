@@ -2,7 +2,8 @@
 #include <stdio.h>
 #include <unistd.h>
 
-  
+// gcc -static -no-pie -fno-stack-protector ./dummy.c -o dummy.out
+
 // Driver Code
 int main()
 {

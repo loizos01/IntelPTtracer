@@ -1,0 +1,141 @@
+64-bit
+00007fe2757baaff 41 89 c0 3d 00 f0 ff ff 77 1f 48 8b 44 24 18 [xed decode error: (2) GENERAL_ERROR]
+[2f, 7fe2757baaff: reconstruct error: decoder out of sync]
+First Instruction: 00007fe2757baaff Last Instruction 00007fe2757bab07
+
+64-bit
+00007fe2757bab09 48 8b 44 24 18 64 48 2b 04 25 28 00 00 00 75 [xed decode error: (2) GENERAL_ERROR]
+[2f, 7fe2757bab09: reconstruct error: decoder out of sync]
+First Instruction: 00007fe2757bab09 Last Instruction 00007fe2757bab17
+
+64-bit
+00007fe2757bab19 44 89 c0 48 83 c4 58 c3 0f 1f 80 00 00 00 00 [xed decode error: (2) GENERAL_ERROR]
+[38, 7fe2757bab19: reconstruct error: decoder out of sync]
+First Instruction: 00007fe2757bab19 Last Instruction 00007fe2757bab20
+
+64-bit
+0000556d3274c8d4 test NOT HANDLING CTYPE INVALID, NOT HANDLING CTYPE INVALID 
+0000556d3274c8d6 jns 0x556d3274c8fc 
+First Instruction: 0000556d3274c8d4 Last Instruction 0000556d3274c8d6
+
+64-bit
+0000556d3274c8fc nop 
+0000556d3274c8fd cmp ptr [rbp], 0xffffff90 
+0000556d3274c900 add ptr [rax+rax*1], NOT HANDLING CTYPE INVALID 
+[3f, 556d3274c900: reconstruct error: decoder out of sync]
+First Instruction: 0000556d3274c8fc Last Instruction 0000556d3274c901
+
+64-bit
+0000556d3274c903 48 8d 45 d0 48 89 c7 e8 d1 ee ff ff 83 f8 ff [xed decode error: (2) GENERAL_ERROR]
+[3f, 556d3274c903: reconstruct error: decoder out of sync]
+First Instruction: 0000556d3274c903 Last Instruction 0000556d3274c90a
+
+64-bit
+0000556d3274b7e0 f3 0f 1e fa f2 ff 25 dd 67 00 00 0f 1f 44 00 [xed decode error: (2) GENERAL_ERROR]
+[48, 556d3274b7e0: reconstruct error: decoder out of sync]
+First Instruction: 0000556d3274b7e0 Last Instruction 0000556d3274b7e4
+
+64-bit
+00007fe27573c0d0 f3 0f 1e fa 31 c0 c3 66 0f 1f 84 00 00 00 00 [xed decode error: (2) GENERAL_ERROR]
+[4f, 7fe27573c0d0: reconstruct error: decoder out of sync]
+First Instruction: 00007fe27573c0d0 Last Instruction 00007fe27573c0d6
+
+64-bit
+0000556d3274c90f cmp NOT HANDLING CTYPE INVALID, 0xffffffff 
+0000556d3274c912 jnz 0x556d3274c936 
+First Instruction: 0000556d3274c90f Last Instruction 0000556d3274c912
+
+64-bit
+0000556d3274c936 cmp ptr [rbp], 0xffffff98 
+0000556d3274c939 add ptr [rbp], NOT HANDLING CTYPE INVALID 
+[4f, 556d3274c939: reconstruct error: decoder out of sync]
+First Instruction: 0000556d3274c936 Last Instruction 0000556d3274c93a
+
+64-bit
+0000556d3274c988 cmp ptr [rbp], 0xffffff98 
+0000556d3274c98b add ptr [rdi], NOT HANDLING CTYPE INVALID 
+0000556d3274c98d xchg NOT HANDLING CTYPE INVALID, NOT HANDLING CTYPE INVALID 
+0000556d3274c98e ror ptr [rax], 0x8b 
+0000556d3274c991 push NOT HANDLING CTYPE INVALID 
+[4f, 556d3274c991: reconstruct error: decoder out of sync]
+First Instruction: 0000556d3274c988 Last Instruction 0000556d3274c99c
+
+64-bit
+0000556d3274c9a3 leave  
+0000556d3274c9a4 ret  
+First Instruction: 0000556d3274c9a3 Last Instruction 0000556d3274c9a4
+
+64-bit
+0000556d3274eb6a xor NOT HANDLING CTYPE INVALID, 0x1 
+0000556d3274eb6d test NOT HANDLING CTYPE INVALID, NOT HANDLING CTYPE INVALID 
+0000556d3274eb6f jz 0x556d3274eb80 
+First Instruction: 0000556d3274eb6a Last Instruction 0000556d3274eb6f
+
+64-bit
+0000556d3274eb80 mov ptr [rbp], 0x0 
+0000556d3274eb82 c4 00 00 00 00 eb 04 83 45 c4 01 83 7d c4 04 [xed decode error: (10) BAD_MAP]
+[59, 556d3274eb82: reconstruct error: decoder out of sync]
+First Instruction: 0000556d3274eb80 Last Instruction 0000556d3274eb87
+
+64-bit
+0000556d3274eb8d cmp ptr [rbp], 0xffffffc4 
+0000556d3274eb90 add NOT HANDLING CTYPE INVALID, 0x7e 
+[59, 556d3274eb90: reconstruct error: decoder out of sync]
+First Instruction: 0000556d3274eb8d Last Instruction 0000556d3274eb91
+
+64-bit
+0000556d3274eb89 add ptr [rbp], 0xffffffc4 
+64-bit
+0000556d3274eb8d cmp ptr [rbp], 0xffffffc4 
+0000556d3274eb90 add NOT HANDLING CTYPE INVALID, 0x7e 
+[59, 556d3274eb90: reconstruct error: decoder out of sync]
+First Instruction: 0000556d3274eb89 Last Instruction 0000556d3274eb91
+
+64-bit
+0000556d3274eb89 add ptr [rbp], 0xffffffc4 
+0000556d3274eb8c add ptr [rbx], NOT HANDLING CTYPE INVALID 
+0000556d3274eb8e jnl 0x556d3274eb54 
+[59, 556d3274eb8e: reconstruct error: decoder out of sync]
+First Instruction: 0000556d3274eb89 Last Instruction 0000556d3274eb91
+
+64-bit
+0000556d3274eb89 add ptr [rbp], 0xffffffc4 
+0000556d3274eb8c add ptr [rbx], NOT HANDLING CTYPE INVALID 
+0000556d3274eb8e jnl 0x556d3274eb54 
+[59, 556d3274eb8e: reconstruct error: decoder out of sync]
+First Instruction: 0000556d3274eb89 Last Instruction 0000556d3274eb91
+
+64-bit
+0000556d3274eb89 add ptr [rbp], 0xffffffc4 
+0000556d3274eb8c add ptr [rbx], NOT HANDLING CTYPE INVALID 
+0000556d3274eb8e jnl 0x556d3274eb54 
+[59, 556d3274eb8e: reconstruct error: decoder out of sync]
+First Instruction: 0000556d3274eb89 Last Instruction 0000556d3274eb91
+
+64-bit
+0000556d3274eb89 add ptr [rbp], 0xffffffc4 
+0000556d3274eb8c add ptr [rbx], NOT HANDLING CTYPE INVALID 
+0000556d3274eb8e jnl 0x556d3274eb54 
+[5f, 556d3274eb8e: reconstruct error: decoder out of sync]
+First Instruction: 0000556d3274eb89 Last Instruction 0000556d3274eb91
+
+64-bit
+0000556d3274eb93 48 8b 45 e0 48 8d 15 f2 34 00 00 48 89 d6 48 [xed decode error: (2) GENERAL_ERROR]
+[5f, 556d3274eb93: reconstruct error: decoder out of sync]
+First Instruction: 0000556d3274eb93 Last Instruction 0000556d3274eba4
+
+64-bit
+0000556d3274c9a5 f3 0f 1e fa 55 48 89 e5 48 83 ec 30 48 89 7d [xed decode error: (2) GENERAL_ERROR]
+[5f, 556d3274c9a5: reconstruct error: decoder out of sync]
+First Instruction: 0000556d3274c9a5 Last Instruction 0000556d3274c9e7
+
+64-bit
+0000556d3274b560 f3 0f 1e fa f2 ff 25 1d 69 00 00 0f 1f 44 00 [xed decode error: (2) GENERAL_ERROR]
+[400000, 556d3274b560: reconstruct error: decoder out of sync]
+First Instruction: 0000556d3274b560 Last Instruction 0000556d3274b564
+
+64-bit
+00007fe2757baac0 f3 0f 1e fa 48 83 ec 58 48 89 54 24 30 64 48 [xed decode error: (2) GENERAL_ERROR]
+[400000, 7fe2757baac0: reconstruct error: decoder out of sync]
+First Instruction: 00007fe2757baac0 Last Instruction 00007fe2757baafd
+

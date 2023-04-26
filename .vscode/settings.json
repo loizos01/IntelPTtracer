@@ -3,6 +3,10 @@
         "stdio.h": "c",
         "unistd.h": "c",
         "perf_event.h": "c",
-        "stdlib.h": "c"
+        "stdlib.h": "c",
+        "stdbool.h": "c",
+        "link.h": "c",
+        "time.h": "c",
+        "ptrace.h": "c"
     }
 }

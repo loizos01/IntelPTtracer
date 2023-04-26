@@ -27,8 +27,8 @@ static int extract_base(const char *, uint64_t *);
 // Public prototypes.
 void *init_inst_decoder(void *buf, uint64_t len,
                         int *decoder_status,
-                        const char *current_exe, struct stats_config *);
-bool decode_trace(struct pt_insn_decoder *decoder, int *decoder_status, struct stats_config *);
+                        const char *current_exe, struct stats_config *stats);
+bool decode_trace(struct pt_insn_decoder *decoder, int *decoder_status, struct stats_config *stats);
 void free_insn_decoder(struct pt_insn_decoder *);
 
 static int extract_base(const char *arg, uint64_t *base)
@@ -265,7 +265,6 @@ bool decode_trace(struct pt_insn_decoder *decoder, int *decoder_status, struct s
 
     /* Checks whether we have enough allocated
      *  memory to store the captured instructions.
-     *  (This is bad implementation)
      */
     if (counter > 1000000)
     {

@@ -7,6 +7,8 @@
 FILE *fptr;
 char buffer1[1000];
 
+//sudo gcc -static -no-pie -fno-stack-protector ./test1.c -o bin1.out
+
 void vulnerableFunc(char* input) {
     char buffer[20];
     memcpy(&buffer,input,1000);
