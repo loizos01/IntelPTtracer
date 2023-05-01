@@ -45,7 +45,6 @@ struct stats_config
     bool psyscall;
     bool step;
     bool limited;
-    bool ptracetime;
     bool panalysetime;
     int depth;
 } stats;

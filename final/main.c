@@ -141,11 +141,6 @@ int main(int argc, char **argv)
             stats.step = true;
             continue;
          }
-         if (strcmp(arg, "--ptracetime") == 0)
-         {
-            stats.ptracetime = true;
-            continue;
-         }
          if (strcmp(arg, "--panalysetime") == 0)
          {
             stats.panalysetime = true;
@@ -169,7 +164,7 @@ int main(int argc, char **argv)
       ptrace(PTRACE_TRACEME, 0, 0, 0);
       /* Because we're now a tracee, execvp will block until the parent
        * attaches and allows us to continue. */
-      execvp(argv[pArgs], argv+(pArgs+1));
+      execvp(argv[pArgs], (argv+pArgs));
       FATAL("%s", strerror(errno));
    }
 
@@ -196,24 +191,6 @@ int main(int argc, char **argv)
    {
       printf("Aux Buffer size: %ld\n", tracer->aux_bufsize);
       printf("Base Buffer size: %ld\n", tracer->base_bufsize);
-   }
-   
-   //Prints the time it takes to trace the program
-   if(stats.ptracetime){
-         
-         ioctl(tracer->perf_fd, PERF_EVENT_IOC_RESET, 0);
-         ioctl(tracer->perf_fd, PERF_EVENT_IOC_ENABLE, 0);
-
-         begin =clock();
-         ptrace(PTRACE_CONT,traceepid,0,0);
-         end =clock();
-
-         ioctl(tracer->perf_fd, PERF_EVENT_IOC_DISABLE, 0);
-
-         time_spent = (double)(end-begin) / CLOCKS_PER_SEC;
-         printf("%f second\n",time_spent);
-
-         return 0;
    }
 
    if(stats.panalysetime){
@@ -289,11 +266,11 @@ int main(int argc, char **argv)
          {
             // There were no blocks in the stream. The user will find out on next
             // call to hwt_ipt_next_block().
-            printf("no blocks");
+            printf("no blocks\n");
          }
          else if (dec_status < 0)
          {
-            printf("sync error");
+            printf("sync error\n");
          }
       }
 

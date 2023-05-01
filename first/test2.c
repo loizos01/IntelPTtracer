@@ -21,7 +21,7 @@ struct hwt_perf_trace pptTrace;
 struct ptxed_stats stats;
 
 char *vdsoFn= VDSO_NAME;
-const char *curr_exe = "/home/ucy-lab216/Desktop/prettylady/dummy.out";
+const char *curr_exe = "/home/ucy-lab216/Desktop/prettylady/first/dummy.out";
 
 FILE  *bufferFd;
 

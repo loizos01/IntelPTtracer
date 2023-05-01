@@ -19,7 +19,7 @@
 #include "load_elf.c"
 
 // Storage for executed instructions
-struct pt_insn execInst[1000000];
+struct pt_insn execInst[100000];
 
 // Private prototypes
 static int extract_base(const char *, uint64_t *);
@@ -27,8 +27,8 @@ static int extract_base(const char *, uint64_t *);
 // Public prototypes.
 void *init_inst_decoder(void *buf, uint64_t len,
                         int *decoder_status,
-                        const char *current_exe, struct stats_config *stats);
-bool decode_trace(struct pt_insn_decoder *decoder, int *decoder_status, struct stats_config *stats);
+                        const char *current_exe, struct stats_config *);
+bool decode_trace(struct pt_insn_decoder *decoder, int *decoder_status, struct stats_config *);
 void free_insn_decoder(struct pt_insn_decoder *);
 
 static int extract_base(const char *arg, uint64_t *base)
@@ -214,7 +214,7 @@ bool decode_trace(struct pt_insn_decoder *decoder, int *decoder_status, struct s
         status = drain_events_insn(decoder, status);
         if (status < 0)
         {
-            printf("Drain Events error ");
+            printf("Drain Events error \n");
             break;
         }
 
@@ -244,6 +244,9 @@ bool decode_trace(struct pt_insn_decoder *decoder, int *decoder_status, struct s
         execInst[counter] = insn;
         counter++;
 
+        if(counter>99997)
+            counter= stats->depth+1;
+
         if (stats->pinst)
             print_insn(&insn, &xed, offset);
 
@@ -263,14 +266,6 @@ bool decode_trace(struct pt_insn_decoder *decoder, int *decoder_status, struct s
         return false;
     }
 
-    /* Checks whether we have enough allocated
-     *  memory to store the captured instructions.
-     */
-    if (counter > 1000000)
-    {
-        printf("Counter too large");
-        return 0;
-    }
 
     if (!exec_flow_analysis(execInst, counter))
     {
